@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime @default(now())
+  predictions  Prediction[]
+  symptomLogs  SymptomLog[]
+  rppgV8Sessions       RppgV8Session[]
+  rppgV8Predictions    RppgV8PredictionResult[]
+}
+
+model Prediction {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Raw model inputs: pcos_label + PredFlag/PredScore/RiskProb per disease
+  features   String   // JSON
+  // Raw model outputs
+  result     String   // JSON
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model SymptomLog {
+  id                    String   @id @default(cuid())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day_of_cycle          Int
+  cycle_phase           String
+  breast_soreness_vas   Float
+  painful_touch_vas     Float
+  pelvic_pressure_vas   Float
+  bloating_delta_cm     Float
+  fatigue_mfi5_vas      Float
+  acne_severity_likert  Int
+  hirsutism_mfg_score   Int
+  symptom_burden_score  Float?
+  createdAt             DateTime @default(now())
+
+  @@index([userId])
+}
+
+model RppgV8Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  rmssd           Float
+  hf              Float
+  lfHfRatio       Float
+  heartRate       Float
+  hrv             Float
+  estimatedSpO2   Float
+  skinTemperature Float
+  hrTrend         Float?
+  meanEda         Float
+  meanTemp        Float
+  asi             Float?
+  rmssdTrend      Float?
+
+  ac              Float?
+  dc              Float?
+  acDcRatio       Float?
+  pulseAmplitude  Float?
+  signalQuality   Float?
+  respiratoryRate Float?
+
+  sessionType    String   @default("checkin")
+  sessionQuality String?
+  capturedAt     DateTime @default(now())
+
+  @@index([userId])
+}
+
+model RppgV8PredictionResult {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  predictedAt DateTime @default(now())
+  nSessionsUsed Int
+
+  sleepQualityScore      Float?
+  focusMemoryScore       Float?
+  mentalWellnessScore    Float?
+  moodScoreScore         Float?
+  metabolicSyndromeScore Float?
+  t2dScore               Float?
+  cardiovascularScore    Float?
+  heartFailureScore      Float?
+  chronicStressScore     Float?
+  infertilityScore       Float?
+
+  moodCheckLabel         String?
+  moodCheckConfidence    Float?
+  moodCheckProbabilities String?
+
+  @@index([userId])
+}
