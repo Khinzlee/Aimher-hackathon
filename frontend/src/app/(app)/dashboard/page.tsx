@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- dashboard adapts multiple summary shapes */
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -108,7 +109,6 @@ export default function DashboardPage() {
       <header className="d-top">
         <div className="d-brand">
           <img src="/logo.png" alt="" />
-          AIMHER
         </div>
         <Link href="/profile" className="d-avatar" aria-label="Profile">
           {(first || 'U').charAt(0).toUpperCase()}

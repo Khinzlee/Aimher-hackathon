@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- AIMHER envelopes are normalized from loose API payloads */
 // rPPG v8 service — same interface as Aimher's services/rppgV8Service.ts.
 // Uses the NestJS API when NEXT_PUBLIC_API_URL is set, otherwise localStorage.
 
@@ -136,102 +137,175 @@ function writeSessions(sessions: RppgV8Session[]) {
   window.localStorage.setItem(BASE_KEY, JSON.stringify(sessions));
 }
 
+function normalizeSession(raw: any): RppgV8Session {
+  return {
+    id: String(raw?.id ?? crypto.randomUUID()),
+    userId: String(raw?.userId ?? raw?.user_id ?? 'local'),
+    rmssd: Number(raw?.rmssd ?? 0),
+    hf: Number(raw?.hf ?? 0),
+    lfHfRatio: Number(raw?.lfHfRatio ?? raw?.lf_hf_ratio ?? 0),
+    heartRate: Number(raw?.heartRate ?? raw?.heart_rate ?? 0),
+    hrv: Number(raw?.hrv ?? 0),
+    estimatedSpO2: Number(raw?.estimatedSpO2 ?? raw?.estimated_spo2 ?? 0),
+    skinTemperature: Number(raw?.skinTemperature ?? raw?.skin_temperature ?? 0),
+    hrTrend: raw?.hrTrend ?? raw?.hr_trend ?? null,
+    meanEda: Number(raw?.meanEda ?? raw?.mean_eda ?? 0),
+    meanTemp: Number(raw?.meanTemp ?? raw?.mean_temp ?? 0),
+    asi: raw?.asi ?? null,
+    rmssdTrend: raw?.rmssdTrend ?? raw?.rmssd_trend ?? null,
+    ac: raw?.ac ?? null,
+    dc: raw?.dc ?? null,
+    acDcRatio: raw?.acDcRatio ?? raw?.ac_dc_ratio ?? null,
+    pulseAmplitude: raw?.pulseAmplitude ?? raw?.pulse_amplitude ?? null,
+    signalQuality: raw?.signalQuality ?? raw?.signal_quality ?? null,
+    respiratoryRate: raw?.respiratoryRate ?? raw?.respiratory_rate ?? null,
+    sessionType: String(raw?.sessionType ?? raw?.session_type ?? 'checkin'),
+    sessionQuality: raw?.sessionQuality ?? raw?.session_quality ?? null,
+    capturedAt: String(raw?.capturedAt ?? raw?.createdAt ?? new Date().toISOString()),
+  };
+}
+
+function cachePrediction(data: RppgV8PredictAllResult) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(PRED_KEY, JSON.stringify(data));
+}
+
+function emptyPrediction(): RppgV8PredictAllResult {
+  return {
+    regression: {},
+    risk: {},
+    mood_check: null,
+    deep_learning: {},
+    feature_vector: {},
+    nSessions: readSessions().length,
+  };
+}
+
 export const rppgV8Service = {
-  logSession: async (payload: RppgV8SessionPayload) => {
-    await delay();
-    const session: RppgV8Session = {
-      id: crypto.randomUUID(),
-      userId: 'local',
-      rmssd: payload.rmssd,
-      hf: payload.hf,
-      lfHfRatio: payload.lf_hf_ratio,
-      heartRate: payload.heart_rate,
-      hrv: payload.hrv,
-      estimatedSpO2: payload.estimated_spo2,
-      skinTemperature: payload.skin_temperature,
-      hrTrend: payload.hr_trend,
-      meanEda: payload.mean_eda,
-      meanTemp: payload.mean_temp,
-      asi: payload.asi,
-      rmssdTrend: payload.rmssd_trend,
-      ac: payload.ac,
-      dc: payload.dc,
-      acDcRatio: payload.ac_dc_ratio,
-      pulseAmplitude: payload.pulse_amplitude,
-      signalQuality: payload.signal_quality,
-      respiratoryRate: payload.respiratory_rate,
-      sessionType: payload.session_type,
-      sessionQuality: payload.session_quality,
-      capturedAt: new Date().toISOString(),
-    };
-    writeSessions([session, ...readSessions()]);
-    return { success: true, data: session };
-  },
+  logSession: async (payload: RppgV8SessionPayload) => withApiFallback(
+    async () => {
+      const raw = await apiFetch<any>('/rppg-v8/session', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      const session = normalizeSession(raw?.session ?? raw);
+      writeSessions([session, ...readSessions()]);
+      return { success: true, data: session };
+    },
+    async () => {
+      await delay();
+      const session = normalizeSession({ ...payload, capturedAt: new Date().toISOString(), userId: 'local' });
+      writeSessions([session, ...readSessions()]);
+      return { success: true, data: session };
+    }
+  ),
 
-  predictAll: async (_metrics?: RppgV8SessionPayload): Promise<{ success: boolean; data: RppgV8PredictAllResult }> => {
-    await delay(300);
-    // Return whatever was cached by a previous call, else empty result
-    const cached =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem(PRED_KEY)
-        : null;
-    if (cached) return { success: true, data: JSON.parse(cached) };
-    return {
-      success: true,
-      data: {
-        regression: {},
-        risk: {},
-        mood_check: null,
-        deep_learning: {},
-        feature_vector: {},
-        nSessions: readSessions().length,
-      },
-    };
-  },
+  predictAll: async (): Promise<{ success: boolean; data: RppgV8PredictAllResult }> => withApiFallback(
+    async () => {
+      const raw = await apiFetch<any>('/rppg-v8/predict', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const data: RppgV8PredictAllResult = {
+        regression: raw?.regression ?? {},
+        risk: raw?.risk ?? {},
+        mood_check: raw?.mood_check ?? null,
+        deep_learning: raw?.deep_learning ?? {},
+        feature_vector: raw?.feature_vector ?? {},
+        nSessions: Number(raw?.nSessions ?? readSessions().length),
+      };
+      cachePrediction(data);
+      return { success: true, data };
+    },
+    async () => {
+      await delay(300);
+      const cached = typeof window !== 'undefined' ? window.localStorage.getItem(PRED_KEY) : null;
+      return { success: true, data: cached ? JSON.parse(cached) : emptyPrediction() };
+    }
+  ),
 
-  predictRegression: async (target: string) => {
-    await delay();
-    return { success: true, data: { target, predictions: {}, ensemble: null } };
-  },
+  predictRegression: async (target: string) => withApiFallback(
+    async () => {
+      const data = await apiFetch<any>('/rppg-v8/predict/regression', {
+        method: 'POST',
+        body: JSON.stringify({ target }),
+      });
+      return { success: true, data };
+    },
+    async () => {
+      await delay();
+      return { success: true, data: { target, predictions: {}, ensemble: null } };
+    }
+  ),
 
   predictRisk: async (domain: string) => {
     await delay();
     return { success: true, data: { domain, risk_score: null, risk_probability: null, risk_flag: 0, severity: null } };
   },
 
-  predictMood: async () => {
-    await delay();
-    return {
-      success: true,
-      data: { best_prediction: null, best_algorithm: '', all_predictions: {}, classes: [] },
-    };
-  },
+  predictMood: async () => withApiFallback(
+    async () => {
+      const data = await apiFetch<any>('/rppg-v8/predict/mood', { method: 'POST', body: JSON.stringify({}) });
+      return { success: true, data };
+    },
+    async () => {
+      await delay();
+      return {
+        success: true,
+        data: { best_prediction: null, best_algorithm: '', all_predictions: {}, classes: [] },
+      };
+    }
+  ),
 
   predictDL: async (target: string) => {
     await delay();
     return { success: true, data: { target, predictions: {}, ensemble: null, method: 'deep_learning' as const } };
   },
 
-  getSessions: async () => {
-    await delay();
-    const sessions = readSessions();
-    return { success: true, data: { sessions, count: sessions.length } };
-  },
+  getSessions: async () => withApiFallback(
+    async () => {
+      const raw = await apiFetch<any>('/rppg-v8/sessions?limit=50');
+      const sessions: RppgV8Session[] = (raw?.sessions ?? []).map(normalizeSession);
+      writeSessions(sessions);
+      return { success: true, data: { sessions, count: Number(raw?.count ?? sessions.length) } };
+    },
+    async () => {
+      await delay();
+      const sessions = readSessions();
+      return { success: true, data: { sessions, count: sessions.length } };
+    }
+  ),
 
-  getPredictions: async () => {
-    await delay();
-    const raw =
-      typeof window !== 'undefined'
-        ? window.localStorage.getItem('aimher-rppg-v8-pred-list')
-        : null;
-    const predictions: RppgV8PredictionResult[] = raw ? JSON.parse(raw) : [];
-    return { success: true, data: { predictions, count: predictions.length } };
-  },
+  getPredictions: async () => withApiFallback(
+    async () => {
+      const raw = await apiFetch<any>('/rppg-v8/predictions');
+      const predictions: RppgV8PredictionResult[] = raw?.predictions ?? [];
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('aimher-rppg-v8-pred-list', JSON.stringify(predictions));
+      }
+      return { success: true, data: { predictions, count: Number(raw?.count ?? predictions.length) } };
+    },
+    async () => {
+      await delay();
+      const raw =
+        typeof window !== 'undefined'
+          ? window.localStorage.getItem('aimher-rppg-v8-pred-list')
+          : null;
+      const predictions: RppgV8PredictionResult[] = raw ? JSON.parse(raw) : [];
+      return { success: true, data: { predictions, count: predictions.length } };
+    }
+  ),
 
-  getMetadata: async () => {
-    await delay();
-    return { success: true, data: null };
-  },
+  getMetadata: async () => withApiFallback(
+    async () => {
+      const data = await apiFetch<any>('/rppg-v8/metadata');
+      return { success: true, data };
+    },
+    async () => {
+      await delay();
+      return { success: true, data: null };
+    }
+  ),
 };
 
 export const REGRESSION_TARGETS = [

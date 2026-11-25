@@ -1,17 +1,22 @@
-// Symptom log data service.
-//
-// Currently backed by localStorage + seeded demo data so the UI is fully
-// usable before the backend exists. All functions are async with REST-shaped
-// signatures — swap the implementations for fetch() calls later without
-// touching the UI.
-//
-// TODO(backend): replace localStorage internals with:
-//   GET  /api/symptom-logs
-//   POST /api/symptom-logs
-//   GET  /api/symptom-logs/summary
+/* eslint-disable @typescript-eslint/no-explicit-any -- API responses are normalized from loose envelopes */
+// Symptom log service. Uses POST/GET /symptoms when the API is configured,
+// with a local demo fallback so the UI works offline.
 
-import { CONDITIONS, SYMPTOMS } from './symptoms';
+import { CONDITIONS, SYMPTOMS, type CyclePhase } from './symptoms';
 import { apiFetch, withApiFallback } from './apiClient';
+
+/** The nine fields accepted by POST /symptoms. */
+export interface SymptomApiPayload {
+  day_of_cycle: number;
+  cycle_phase: CyclePhase;
+  breast_soreness_vas: number;
+  painful_touch_vas: number;
+  pelvic_pressure_vas: number;
+  bloating_delta_cm: number;
+  fatigue_mfi5_vas: number;
+  acne_severity_likert: number;
+  hirsutism_mfg_score: number;
+}
 
 export interface SymptomLogEntry {
   id: string;
@@ -19,8 +24,10 @@ export interface SymptomLogEntry {
   date: string;
   /** ISO timestamp */
   loggedAt: string;
-  /** symptomId -> intensity 0-10 (only symptoms the user rated) */
+  /** symptomId -> normalized 0-10 intensity for dashboards */
   values: Record<string, number>;
+  /** raw clinical values from the API, kept for editing the daily log */
+  metrics?: SymptomApiPayload;
 }
 
 export interface ConditionSummary {
@@ -41,6 +48,39 @@ const STORAGE_KEY = 'aimher-symptom-logs-v1';
 const SEED_KEY = 'aimher-symptom-logs-seeded-v1';
 
 const delay = (ms = 120) => new Promise((r) => setTimeout(r, ms));
+
+type ClinicalField = Exclude<keyof SymptomApiPayload, 'day_of_cycle' | 'cycle_phase'>;
+
+const API_TO_SYMPTOM: Record<ClinicalField, string> = {
+  breast_soreness_vas: 'breast_soreness_vas',
+  painful_touch_vas: 'painful_touch_vas',
+  pelvic_pressure_vas: 'pelvic_pressure_vas',
+  bloating_delta_cm: 'bloating_delta_cm',
+  fatigue_mfi5_vas: 'fatigue_mfi5_vas',
+  acne_severity_likert: 'acne_severity_likert',
+  hirsutism_mfg_score: 'hirsutism_mfg_score',
+};
+
+const FIELD_MAX: Record<ClinicalField, number> = {
+  breast_soreness_vas: 10,
+  painful_touch_vas: 10,
+  pelvic_pressure_vas: 10,
+  bloating_delta_cm: 10,
+  fatigue_mfi5_vas: 10,
+  acne_severity_likert: 4,
+  hirsutism_mfg_score: 36,
+};
+
+function valuesFromMetrics(metrics: SymptomApiPayload): Record<string, number> {
+  const values: Record<string, number> = {};
+  (Object.keys(API_TO_SYMPTOM) as ClinicalField[]).forEach((field) => {
+    values[API_TO_SYMPTOM[field]] = Math.max(
+      0,
+      Math.min(10, (Number(metrics[field] || 0) / FIELD_MAX[field]) * 10)
+    );
+  });
+  return values;
+}
 
 function readStore(): SymptomLogEntry[] {
   if (typeof window === 'undefined') return [];
@@ -93,6 +133,16 @@ function normalizeRemoteEntry(raw: any): SymptomLogEntry | null {
     });
   }
 
+  const metrics: Partial<SymptomApiPayload> = {};
+  (Object.keys(API_TO_SYMPTOM) as ClinicalField[]).forEach((field) => {
+    if (typeof raw[field] === 'number') metrics[field] = raw[field];
+  });
+  if (typeof raw.day_of_cycle === 'number') metrics.day_of_cycle = raw.day_of_cycle;
+  if (raw.cycle_phase) metrics.cycle_phase = raw.cycle_phase;
+  if (Object.keys(metrics).length) {
+    Object.assign(values, valuesFromMetrics(metrics as SymptomApiPayload));
+  }
+
   const stamp = raw.date ?? raw.loggedAt ?? raw.createdAt ?? raw.created_at;
   const date = stamp ? String(stamp).slice(0, 10) : dateKey(new Date());
 
@@ -101,6 +151,7 @@ function normalizeRemoteEntry(raw: any): SymptomLogEntry | null {
     date,
     loggedAt: String(raw.loggedAt ?? raw.createdAt ?? raw.created_at ?? new Date().toISOString()),
     values,
+    metrics: Object.keys(metrics).length ? (metrics as SymptomApiPayload) : raw.metrics,
   };
 }
 
@@ -150,7 +201,7 @@ export async function getSymptomLogs(): Promise<SymptomLogEntry[]> {
   return withApiFallback(
     async () => {
       const raw = await apiFetch<any>('/symptoms/history?limit=100');
-      const list = Array.isArray(raw) ? raw : (raw?.entries ?? raw?.logs ?? []);
+      const list = Array.isArray(raw) ? raw : (raw?.data ?? raw?.entries ?? raw?.logs ?? []);
       return list
         .map(normalizeRemoteEntry)
         .filter((entry: SymptomLogEntry | null): entry is SymptomLogEntry => entry !== null)
@@ -164,17 +215,15 @@ export async function getSymptomLogs(): Promise<SymptomLogEntry[]> {
   );
 }
 
-export async function saveSymptomLog(values: Record<string, number>): Promise<SymptomLogEntry> {
+export async function saveSymptomLog(metrics: SymptomApiPayload): Promise<SymptomLogEntry> {
   const today = dateKey(new Date());
+  const values = valuesFromMetrics(metrics);
+
   return withApiFallback(
     async () => {
       const raw = await apiFetch<any>('/symptoms', {
         method: 'POST',
-        body: JSON.stringify({
-          date: today,
-          values,
-          symptoms: Object.entries(values).map(([symptomId, intensity]) => ({ symptomId, intensity })),
-        }),
+        body: JSON.stringify(metrics),
       });
       const entry = normalizeRemoteEntry(raw) ?? {
         id: crypto.randomUUID(),
@@ -182,6 +231,8 @@ export async function saveSymptomLog(values: Record<string, number>): Promise<Sy
         loggedAt: new Date().toISOString(),
         values,
       };
+      entry.date = today;
+      entry.metrics = metrics;
       writeStore([entry, ...readStore().filter((e) => e.date !== today)]);
       return entry;
     },
@@ -197,6 +248,7 @@ export async function saveSymptomLog(values: Record<string, number>): Promise<Sy
         values: {},
       };
       entry.values = { ...entry.values, ...values };
+      entry.metrics = metrics;
       entry.loggedAt = new Date().toISOString();
       const next = existing ? entries.map((e) => (e.id === entry.id ? entry : e)) : [...entries, entry];
       writeStore(next);
@@ -215,8 +267,7 @@ function burdenForEntry(entry: SymptomLogEntry, symptomIds: string[]): number | 
 }
 
 export async function getConditionSummaries(days = 14): Promise<ConditionSummary[]> {
-  await ensureSeeded();
-  const entries = readStore().sort((a, b) => (a.date < b.date ? -1 : 1));
+  const entries = (await getSymptomLogs()).sort((a, b) => (a.date < b.date ? -1 : 1));
   const today = new Date();
 
   return CONDITIONS.map((cond) => {

@@ -4,7 +4,9 @@
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002/api").replace(/\/$/, "");
 
-export const isApiConfigured = Boolean(process.env.NEXT_PUBLIC_API_URL);
+// Backend integration is enabled by default; NEXT_PUBLIC_API_URL can override the host.
+// Requests fall back to the local demo store when the API is unavailable.
+export const isApiConfigured: boolean = true;
 
 export function getAccessToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -51,7 +53,7 @@ export async function withApiFallback<T>(
   remote: () => Promise<T>,
   local: () => Promise<T>
 ): Promise<T> {
-  if (isApiConfigured()) {
+  if (isApiConfigured) {
     try {
       return await remote();
     } catch {

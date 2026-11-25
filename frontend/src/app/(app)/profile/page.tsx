@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- profile hook returns a loose object */
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -124,8 +125,8 @@ export default function ProfilePage() {
         </div>
 
         <button className="p-signout" onClick={signOut}>
-          <LogOut size={16} style={{ verticalAlign: '-3px', marginRight: 8 }} />
-          Sign Out
+          <LogOut size={17} strokeWidth={2} />
+          <span>Sign Out</span>
         </button>
       </div>
     </>
