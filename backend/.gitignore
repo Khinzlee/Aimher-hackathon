@@ -5,3 +5,4 @@ dist
 *.db-journal
 inference/.venv
 inference/__pycache__
+*.tsbuildinfo
