@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, User, HeartPulse, ClipboardList, Camera } from "lucide-react";
-import { CONDITIONS } from "@/lib/symptoms";
+import { ArrowLeft, ArrowRight, Check, HeartPulse, ClipboardList, Camera } from "lucide-react";
+import { DISEASES } from "@/lib/symptoms";
 import { SymptomIcon } from "@/components/SymptomIcon";
 
 const TEAL = "#00897B";
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 3;
 
 interface Profile {
   full_name: string;
@@ -62,7 +62,7 @@ export default function OnboardingPage() {
     { title: "What would you like to track?", sub: "Pick the areas that matter to you" },
     { title: "Daily symptom logging", sub: "Rate how you feel in seconds" },
     { title: "You're all set", sub: "Here's what you can do" },
-  ];
+  ].slice(0, TOTAL_STEPS);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-teal-50 via-white to-white">
@@ -154,13 +154,13 @@ export default function OnboardingPage() {
 
             {step === 1 && (
               <div className="space-y-3 flex-1">
-                {CONDITIONS.map((c) => {
-                  const selected = profile.focus.includes(c.id);
+                {DISEASES.map((c) => {
+                  const selected = profile.focus.includes(c.key);
                   return (
                     <button
-                      key={c.id}
+                      key={c.key}
                       type="button"
-                      onClick={() => toggleFocus(c.id)}
+                      onClick={() => toggleFocus(c.key)}
                       className={`w-full flex items-center gap-3 rounded-2xl border p-4 text-left transition-all ${
                         selected ? "border-transparent shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"
                       }`}
@@ -210,25 +210,6 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                 ))}
-              </div>
-            )}
-
-            {step === 3 && (
-              <div className="flex-1 flex flex-col items-center justify-center text-center">
-                <motion.div
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="h-20 w-20 rounded-full flex items-center justify-center mb-6"
-                  style={{ backgroundColor: `${TEAL}1A` }}
-                >
-                  <User className="h-10 w-10" style={{ color: TEAL }} />
-                </motion.div>
-                <h2 className="text-xl font-bold text-gray-900 mb-2">
-                  Welcome{profile.full_name ? `, ${profile.full_name.split(" ")[0]}` : ""}!
-                </h2>
-                <p className="text-sm text-gray-500 max-w-xs">
-                  Your dashboard is ready. Start by logging how you feel today, or jump straight into an rPPG measurement.
-                </p>
               </div>
             )}
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { getSeverity } from '@/lib/symptoms';
+import { burdenSeverity } from '@/lib/symptoms';
 
 interface VASSliderProps {
   label: string;
@@ -10,6 +10,7 @@ interface VASSliderProps {
   onChange: (value: number) => void;
   min?: number;
   max?: number;
+  step?: number;
   lowLabel?: string;
   highLabel?: string;
 }
@@ -21,12 +22,13 @@ export default function VASSlider({
   onChange,
   min = 0,
   max = 10,
+  step = 1,
   lowLabel = 'None',
   highLabel = 'Severe',
 }: VASSliderProps) {
   const [dragging, setDragging] = useState(false);
   const percentage = ((value - min) / (max - min)) * 100;
-  const sev = getSeverity(value);
+  const sev = burdenSeverity(value);
 
   return (
     <div className="space-y-3">
@@ -40,7 +42,7 @@ export default function VASSlider({
             className="text-2xl font-bold tabular-nums transition-colors"
             style={{ color: sev.color }}
           >
-            {value}
+            {step < 1 ? value.toFixed(1) : value}
           </span>
           <span className="text-xs text-gray-400">/{max}</span>
         </div>
@@ -57,9 +59,12 @@ export default function VASSlider({
           type="range"
           min={min}
           max={max}
-          step={1}
+          step={step}
           value={value}
-          onChange={(e) => onChange(parseInt(e.target.value, 10))}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            onChange(step < 1 ? Math.round(v * 10) / 10 : Math.round(v));
+          }}
           onPointerDown={() => setDragging(true)}
           onPointerUp={() => setDragging(false)}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"

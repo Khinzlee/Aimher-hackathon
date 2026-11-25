@@ -1,13 +1,12 @@
-import { getSeverity } from '@/lib/symptoms';
+import type { Severity } from '@/lib/symptoms';
 
-export default function SeverityBadge({ value }: { value: number }) {
-  const sev = getSeverity(value);
+export default function SeverityBadge({ severity }: { severity: Severity }) {
   return (
     <span
       className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-      style={{ backgroundColor: sev.bg, color: sev.color }}
+      style={{ backgroundColor: severity.bg, color: severity.color }}
     >
-      {sev.label}
+      {severity.label}
     </span>
   );
 }

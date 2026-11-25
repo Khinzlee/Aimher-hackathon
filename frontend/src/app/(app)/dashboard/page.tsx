@@ -3,10 +3,19 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Camera, ChevronRight, ClipboardList } from 'lucide-react';
-import { CONDITIONS, getSeverity } from '@/lib/symptoms';
 import {
-  getConditionSummaries,
-  type ConditionSummary,
+  DISEASES,
+  burdenSeverity,
+  diseaseRouteId,
+  probabilitySeverity,
+  riskScoreSeverity,
+} from '@/lib/symptoms';
+import {
+  getSymptomHistory,
+  getCachedPrediction,
+  type DiseasePredictionMap,
+  type PredictResponse,
+  type SymptomLogEntry,
 } from '@/lib/symptomService';
 import SeverityBadge from '@/components/SeverityBadge';
 import Sparkline from '@/components/Sparkline';
@@ -22,28 +31,38 @@ function greeting(d: Date) {
 }
 
 export default function DashboardPage() {
-  const [summaries, setSummaries] = useState<ConditionSummary[] | null>(null);
+  const [entries, setEntries] = useState<SymptomLogEntry[] | null>(null);
+  const [prediction, setPrediction] = useState<PredictResponse | null>(null);
   const now = useNow();
   const profile = useProfile();
   const firstName = profile?.full_name?.split(' ')[0];
 
   useEffect(() => {
     let alive = true;
-    getConditionSummaries(14).then((s) => alive && setSummaries(s));
+    getSymptomHistory(30).then((h) => {
+      if (!alive) return;
+      setEntries(h.data);
+      setPrediction(getCachedPrediction());
+    });
     return () => {
       alive = false;
     };
   }, []);
 
   const today = now
-    ? now.toLocaleDateString(undefined, {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-      })
+    ? now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
     : '';
 
-  const flagged = summaries?.filter((s) => s.redFlag);
+  const latest = entries?.[0] ?? null;
+  const burden = latest?.symptomBurdenScore ?? null;
+  const burdenSev = burden !== null ? burdenSeverity(burden) : null;
+  const diseases: DiseasePredictionMap = prediction?.diseases ?? {};
+  const burdenSeries = (entries ?? []).slice().reverse().map((e) => e.symptomBurdenScore);
+
+  const flagged = DISEASES.filter((d) => {
+    const p = diseases[d.key];
+    return p && (p.severity === 'High' || p.predicted === 1);
+  });
 
   return (
     <div className="space-y-6">
@@ -54,18 +73,18 @@ export default function DashboardPage() {
           {firstName ? `, ${firstName}` : ''}
         </h1>
         <p className="text-sm text-gray-500 mt-1">
-          Symptom burden across 6 tracked conditions
+          Symptom burden &amp; disease risk from your latest log
         </p>
       </div>
 
-      {/* Quick actions — Aimher-style action rows */}
+      {/* Quick actions */}
       <div className="space-y-3">
         {[
           {
             href: '/log',
             icon: ClipboardList,
             title: 'Log Symptoms',
-            subtitle: 'Rate intensity for your tracked conditions',
+            subtitle: 'Rate intensity — runs risk prediction',
             gradient: 'bg-teal-500',
           },
           {
@@ -93,121 +112,105 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {flagged && flagged.length > 0 && (
+      {flagged.length > 0 && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 flex gap-2">
           <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
           <p className="text-xs text-red-800">
-            {flagged.length} condition{flagged.length > 1 ? 's have' : ' has'} red-flag
-            symptoms logged. Review the highlighted cards below.
+            Elevated risk flagged for {flagged.map((d) => d.name).join(', ')}. Review the cards below.
           </p>
         </div>
       )}
 
-      {!summaries ? (
-        <div className="space-y-3">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-gray-200 p-4 animate-pulse h-24" />
-          ))}
+      {/* Burden summary */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold text-sm text-gray-900">Symptom Burden Score</h2>
+          {burden !== null && <SeverityBadge severity={burdenSev!} />}
         </div>
-      ) : (
-        <div className="space-y-3">
-          {CONDITIONS.map((cond) => {
-            const s = summaries.find((x) => x.conditionId === cond.id)!;
-            const burden = s.latestBurden;
-            const sev = burden !== null ? getSeverity(burden) : null;
-            const delta =
-              burden !== null && s.previousBurden !== null
-                ? burden - s.previousBurden
-                : null;
-            const isFlagged = s.redFlag;
+        <div className="flex items-end justify-between">
+          <div className="flex items-baseline gap-1">
+            <span className="text-4xl font-bold tabular-nums" style={{ color: burdenSev?.color ?? '#9CA3AF' }}>
+              {burden !== null ? burden.toFixed(1) : '—'}
+            </span>
+            <span className="text-sm text-gray-400">/10</span>
+          </div>
+          <Sparkline data={burdenSeries} color="#00897B" width={140} height={44} />
+        </div>
+        {latest && (
+          <p className="text-[11px] text-gray-400 mt-2">
+            From log from {new Date(latest.loggedAt).toLocaleDateString()}
+          </p>
+        )}
+      </div>
 
+      {/* Disease risk cards */}
+      <div className="space-y-3">
+        <h2 className="font-bold text-sm text-gray-900 px-1">Disease Risk Prediction</h2>
+        {!prediction ? (
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 text-center">
+            <p className="text-sm text-gray-500">
+              No prediction yet — log your symptoms to generate disease risk scores.
+            </p>
+          </div>
+        ) : (
+          DISEASES.map((d) => {
+            const pred = diseases[d.key];
+            if (!pred) return null;
+            const probSev = probabilitySeverity(pred.probability);
+            const riskSev = riskScoreSeverity(pred.riskScore);
+            const elevated = pred.severity === 'High' || pred.predicted === 1;
             return (
               <Link
-                key={cond.id}
-                href={`/conditions/${cond.id}`}
+                key={d.key}
+                href={`/conditions/${diseaseRouteId(d.key)}`}
                 className={`block bg-white rounded-2xl border p-4 transition-shadow hover:shadow-md ${
-                  isFlagged ? 'border-red-300' : 'border-gray-200'
+                  elevated ? 'border-red-300' : 'border-gray-200'
                 }`}
               >
                 <div className="flex items-start gap-3">
                   <div
                     className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: `${cond.color}1A` }}
+                    style={{ backgroundColor: `${d.color}1A` }}
                   >
-                    <SymptomIcon
-                      name={cond.icon}
-                      className="h-5 w-5"
-                      style={{ color: cond.color }}
-                    />
+                    <SymptomIcon name={d.icon} className="h-5 w-5" style={{ color: d.color }} />
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="font-bold text-gray-900 text-sm">{cond.name}</h2>
-                      {isFlagged && (
+                      <h3 className="font-bold text-gray-900 text-sm">{d.name}</h3>
+                      {elevated && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-semibold">
-                          <AlertTriangle className="h-3 w-3" /> Red flag
+                          <AlertTriangle className="h-3 w-3" /> Flagged
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500 truncate">{cond.fullName}</p>
-
-                    <div className="flex items-end justify-between mt-2">
-                      <div className="flex items-baseline gap-1">
-                        {burden !== null ? (
-                          <>
-                            <span
-                              className="text-2xl font-bold tabular-nums"
-                              style={{ color: sev!.color }}
-                            >
-                              {burden.toFixed(1)}
-                            </span>
-                            <span className="text-xs text-gray-400">/10</span>
-                            <span className="ml-2">
-                              <SeverityBadge value={burden} />
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-sm text-gray-400">No data yet</span>
-                        )}
-                      </div>
-                      <Sparkline
-                        data={s.series.map((p) => p.value)}
-                        color={cond.color}
-                      />
+                    <p className="text-xs text-gray-500">{d.fullName}</p>
+                    <div className="flex items-center gap-4 mt-2 text-xs">
+                      <span className="text-gray-500">
+                        Probability{' '}
+                        <strong className="tabular-nums" style={{ color: probSev.color }}>
+                          {(pred.probability * 100).toFixed(0)}%
+                        </strong>
+                      </span>
+                      <SeverityBadge severity={probSev} />
+                      <span className="text-gray-500">
+                        Risk score{' '}
+                        <strong className="tabular-nums" style={{ color: riskSev.color }}>
+                          {(pred.riskScore * 100).toFixed(0)}%
+                        </strong>
+                      </span>
+                      <SeverityBadge severity={riskSev} />
                     </div>
-
-                    {delta !== null && Math.abs(delta) >= 0.5 && (
-                      <p
-                        className={`text-[11px] mt-1 font-medium ${
-                          delta > 0 ? 'text-red-600' : 'text-green-600'
-                        }`}
-                      >
-                        {delta > 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(1)} vs previous
-                        entry
-                      </p>
-                    )}
                   </div>
-
                   <ChevronRight className="h-5 w-5 text-gray-300 shrink-0 mt-1" />
                 </div>
               </Link>
             );
-          })}
-        </div>
-      )}
-
-      <Link
-        href="/log"
-        className="flex items-center justify-center gap-2 w-full rounded-2xl py-3.5 font-semibold text-white text-sm shadow-sm"
-        style={{ backgroundColor: '#00897B' }}
-      >
-        <ClipboardList className="h-4 w-4" />
-        Log today&apos;s symptoms
-      </Link>
+          })
+        )}
+      </div>
 
       <p className="text-[11px] text-gray-400 text-center leading-relaxed">
-        Symptom burden is computed from your logged intensities and is not a
+        Predictions are model outputs from your logged symptom intensities — not a
         medical diagnosis.
       </p>
     </div>

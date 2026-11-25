@@ -958,25 +958,25 @@ const RppgCamera: React.FC<RppgCameraProps> = ({
 
       <style>{`
         .rppg-camera { position: relative; width: 100%; max-width: 600px; margin: 0 auto; }
-        .camera-container { position: relative; background: #000; border-radius: 12px; overflow: hidden; }
-        .camera-view { width: 100%; height: 300px; position: relative; }
+        .camera-container { position: relative; background: #10251f; border-radius: 20px; overflow: hidden; box-shadow: 0 18px 36px rgba(22, 58, 46, .18); }
+        .camera-view { width: 100%; height: clamp(260px, 58vw, 380px); position: relative; }
         .rppg-video { width: 100%; height: 100%; object-fit: cover; background: #000; display: block; }
-        .camera-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #111; color: #666; }
-        .measurement-overlay { position: absolute; top: 0; left: 0; right: 0; padding: 12px; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); color: white; }
+        .camera-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 40%, #29463c, #10251f 72%); color: #c1d4cb; }
+        .measurement-overlay { position: absolute; top: 0; left: 0; right: 0; padding: 14px; background: linear-gradient(to bottom, rgba(7,24,19,.88), rgba(7,24,19,.35), transparent); color: white; }
         .timer { text-align: center; margin-bottom: 8px; }
         .time-display { font-size: 22px; font-weight: bold; }
         .progress-bar { width: 100%; height: 3px; background: rgba(255,255,255,0.2); border-radius: 2px; overflow: hidden; margin-top: 4px; }
-        .progress-fill { height: 100%; background: #4caf50; transition: width 1s linear; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #65c79c, #38a985); transition: width 1s linear; }
         .signal-quality { font-size: 11px; margin-top: 4px; }
         .signal-quality .good { color: #4caf50; font-weight: bold; }
         .signal-quality .poor { color: #ff9800; font-weight: bold; }
-        .live-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: rgba(0,0,0,0.5); padding: 6px; border-radius: 4px; margin-top: 4px; }
+        .live-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: rgba(9,31,25,.68); padding: 9px 7px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; margin-top: 6px; backdrop-filter: blur(8px); }
         .live-metrics > div { text-align: center; }
         .metric-label { font-size: 9px; text-transform: uppercase; opacity: 0.7; }
         .metric-value { font-size: 16px; font-weight: bold; }
         .metric-unit { font-size: 8px; opacity: 0.6; }
         .hrv-status { text-align: center; font-size: 11px; margin-top: 4px; padding: 2px 8px; background: rgba(0,0,0,0.3); border-radius: 4px; display: inline-block; width: auto; }
-        .readiness-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.6); color: white; gap: 6px; padding: 20px; }
+        .readiness-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(9,31,25,.68); color: white; gap: 8px; padding: 20px; backdrop-filter: blur(5px); }
         .readiness-header { font-size: 14px; font-weight: bold; margin-bottom: 4px; opacity: 0.9; }
         .readiness-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
         .readiness-icon { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; }
