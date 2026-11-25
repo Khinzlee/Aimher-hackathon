@@ -1,0 +1,726 @@
+{
+  "version": "v8",
+  "all_features": [
+    "RMSSD",
+    "HF",
+    "LF_HF_Ratio",
+    "Heart_Rate",
+    "Heart_Rate_Variability_HRV",
+    "Estimated_SpO2",
+    "Skin_Temperature",
+    "HR_Trend",
+    "Mean_EDA",
+    "Mean_Temp",
+    "Autonomic_Stress_Index",
+    "RMSSD_Trend"
+  ],
+  "n_features_total": 12,
+  "regression_targets": [
+    "Sleep_Quality",
+    "Focus_Memory",
+    "Mental_Wellness",
+    "Mood_Score",
+    "Metabolic_Syndrome_Risk",
+    "T2D_Metabolic_Risk_Index",
+    "Cardiovascular_Risk_Score",
+    "Heart_Failure_Alert_Score",
+    "Chronic_Stress_Severity",
+    "Infertility_Reproductive_Risk"
+  ],
+  "risk_domains": [
+    "Sleep_Quality",
+    "Focus_Memory",
+    "Mental_Wellness",
+    "Mood_Check",
+    "Metabolic_Syndrome",
+    "Type_2_Diabetes",
+    "Cardiovascular_Disease",
+    "Heart_Failure",
+    "Chronic_Stress",
+    "Infertility"
+  ],
+  "per_target_features": {
+    "Sleep_Quality": [
+      "RMSSD",
+      "HF",
+      "LF_HF_Ratio",
+      "Heart_Rate",
+      "Estimated_SpO2",
+      "Skin_Temperature"
+    ],
+    "Focus_Memory": [
+      "RMSSD",
+      "LF_HF_Ratio",
+      "Heart_Rate",
+      "Heart_Rate_Variability_HRV"
+    ],
+    "Mental_Wellness": [
+      "RMSSD",
+      "LF_HF_Ratio",
+      "HF",
+      "Heart_Rate"
+    ],
+    "Mood_Score": [
+      "RMSSD",
+      "LF_HF_Ratio",
+      "HR_Trend",
+      "Skin_Temperature"
+    ],
+    "Metabolic_Syndrome_Risk": [
+      "RMSSD",
+      "Mean_EDA",
+      "Mean_Temp"
+    ],
+    "T2D_Metabolic_Risk_Index": [
+      "Mean_Temp",
+      "RMSSD"
+    ],
+    "Cardiovascular_Risk_Score": [
+      "RMSSD",
+      "Mean_EDA"
+    ],
+    "Heart_Failure_Alert_Score": [
+      "RMSSD_Trend",
+      "Mean_Temp"
+    ],
+    "Chronic_Stress_Severity": [
+      "Mean_EDA",
+      "RMSSD"
+    ],
+    "Infertility_Reproductive_Risk": [
+      "Autonomic_Stress_Index",
+      "RMSSD",
+      "Mean_EDA"
+    ]
+  },
+  "regression_scalers": {
+    "Sleep_Quality": {
+      "mean": [
+        61.71721160164218,
+        340.1435986107172,
+        0.9427265258334012,
+        80.48202752408922,
+        97.31498003821054,
+        34.14621760786775
+      ],
+      "scale": [
+        36.86501050682734,
+        204.22112924301268,
+        1.2556065168401165,
+        7.829916974539454,
+        3.291393992034456,
+        2.8007676103986583
+      ],
+      "features": [
+        "RMSSD",
+        "HF",
+        "LF_HF_Ratio",
+        "Heart_Rate",
+        "Estimated_SpO2",
+        "Skin_Temperature"
+      ]
+    },
+    "Focus_Memory": {
+      "mean": [
+        61.71721160164218,
+        0.9427265258334012,
+        80.48202752408922,
+        35.44665167204463
+      ],
+      "scale": [
+        36.86501050682734,
+        1.2556065168401165,
+        7.829916974539454,
+        15.531151217909535
+      ],
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "Heart_Rate",
+        "Heart_Rate_Variability_HRV"
+      ]
+    },
+    "Mental_Wellness": {
+      "mean": [
+        61.71721160164218,
+        0.9427265258334012,
+        340.1435986107172,
+        80.48202752408922
+      ],
+      "scale": [
+        36.86501050682734,
+        1.2556065168401165,
+        204.22112924301268,
+        7.829916974539454
+      ],
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "HF",
+        "Heart_Rate"
+      ]
+    },
+    "Mood_Score": {
+      "mean": [
+        61.71721160164218,
+        0.9427265258334012,
+        -0.04130347845077711,
+        34.14621760786775
+      ],
+      "scale": [
+        36.86501050682734,
+        1.2556065168401165,
+        8.458786818448495,
+        2.8007676103986583
+      ],
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "HR_Trend",
+        "Skin_Temperature"
+      ]
+    },
+    "Metabolic_Syndrome_Risk": {
+      "mean": [
+        61.71721160164218,
+        1.8815924605611796,
+        34.27045279749698
+      ],
+      "scale": [
+        36.86501050682734,
+        2.880056396412542,
+        2.7916015842771067
+      ],
+      "features": [
+        "RMSSD",
+        "Mean_EDA",
+        "Mean_Temp"
+      ]
+    },
+    "T2D_Metabolic_Risk_Index": {
+      "mean": [
+        34.27045279749698,
+        61.71721160164218
+      ],
+      "scale": [
+        2.7916015842771067,
+        36.86501050682734
+      ],
+      "features": [
+        "Mean_Temp",
+        "RMSSD"
+      ]
+    },
+    "Cardiovascular_Risk_Score": {
+      "mean": [
+        61.71721160164218,
+        1.8815924605611796
+      ],
+      "scale": [
+        36.86501050682734,
+        2.880056396412542
+      ],
+      "features": [
+        "RMSSD",
+        "Mean_EDA"
+      ]
+    },
+    "Heart_Failure_Alert_Score": {
+      "mean": [
+        0.2138253994635314,
+        34.27045279749698
+      ],
+      "scale": [
+        39.122744708321044,
+        2.7916015842771067
+      ],
+      "features": [
+        "RMSSD_Trend",
+        "Mean_Temp"
+      ]
+    },
+    "Chronic_Stress_Severity": {
+      "mean": [
+        1.8815924605611796,
+        61.71721160164218
+      ],
+      "scale": [
+        2.880056396412542,
+        36.86501050682734
+      ],
+      "features": [
+        "Mean_EDA",
+        "RMSSD"
+      ]
+    },
+    "Infertility_Reproductive_Risk": {
+      "mean": [
+        0.041941701501394944,
+        61.71721160164218,
+        1.8815924605611796
+      ],
+      "scale": [
+        0.08131075510597865,
+        36.86501050682734,
+        2.880056396412542
+      ],
+      "features": [
+        "Autonomic_Stress_Index",
+        "RMSSD",
+        "Mean_EDA"
+      ]
+    }
+  },
+  "mood_check": {
+    "features": [
+      "RMSSD",
+      "LF_HF_Ratio",
+      "HR_Trend",
+      "Skin_Temperature"
+    ],
+    "classes": [
+      "Low",
+      "Neutral",
+      "Positive"
+    ],
+    "best_model": "MLP",
+    "accuracy": 0.9505582137161085,
+    "scaler": {
+      "mean": [
+        61.80477774035492,
+        0.9228832955929022,
+        0.016587801223684705,
+        34.20306621438191
+      ],
+      "scale": [
+        36.85517604934422,
+        1.2453113701088498,
+        8.644243575634546,
+        2.7620963467672666
+      ]
+    }
+  },
+  "risk_domain_features": {
+    "Sleep_Quality": {
+      "features": [
+        "RMSSD",
+        "HF",
+        "LF_HF_Ratio",
+        "Heart_Rate",
+        "Estimated_SpO2",
+        "Skin_Temperature"
+      ],
+      "score_column": "Sleep_Quality"
+    },
+    "Focus_Memory": {
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "Heart_Rate",
+        "Heart_Rate_Variability_HRV"
+      ],
+      "score_column": "Focus_Memory"
+    },
+    "Mental_Wellness": {
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "HF",
+        "Heart_Rate"
+      ],
+      "score_column": "Mental_Wellness"
+    },
+    "Mood_Check": {
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "HR_Trend",
+        "Skin_Temperature"
+      ],
+      "score_column": "Mood_Score"
+    },
+    "Metabolic_Syndrome": {
+      "features": [
+        "RMSSD",
+        "Mean_EDA",
+        "Mean_Temp"
+      ],
+      "score_column": "Metabolic_Syndrome_Risk"
+    },
+    "Type_2_Diabetes": {
+      "features": [
+        "Mean_Temp",
+        "RMSSD"
+      ],
+      "score_column": "T2D_Metabolic_Risk_Index"
+    },
+    "Cardiovascular_Disease": {
+      "features": [
+        "RMSSD",
+        "Mean_EDA"
+      ],
+      "score_column": "Cardiovascular_Risk_Score"
+    },
+    "Heart_Failure": {
+      "features": [
+        "RMSSD_Trend",
+        "Mean_Temp"
+      ],
+      "score_column": "Heart_Failure_Alert_Score"
+    },
+    "Chronic_Stress": {
+      "features": [
+        "Mean_EDA",
+        "RMSSD"
+      ],
+      "score_column": "Chronic_Stress_Severity"
+    },
+    "Infertility": {
+      "features": [
+        "Autonomic_Stress_Index",
+        "RMSSD",
+        "Mean_EDA"
+      ],
+      "score_column": "Infertility_Reproductive_Risk"
+    }
+  },
+  "risk_flag_classes": [
+    "At Risk",
+    "Normal"
+  ],
+  "hrv_status_thresholds": {
+    "Normal/Excellent": 50,
+    "Slightly Reduced": 40,
+    "Moderately Reduced": 30,
+    "Low": 20,
+    "Very Low": 10,
+    "Extremely Low": 0
+  },
+  "feature_index_map": {
+    "f0": "RMSSD",
+    "f1": "HF",
+    "f2": "LF_HF_Ratio",
+    "f3": "Heart_Rate",
+    "f4": "Heart_Rate_Variability_HRV",
+    "f5": "Estimated_SpO2",
+    "f6": "Skin_Temperature",
+    "f7": "HR_Trend",
+    "f8": "Mean_EDA",
+    "f9": "Mean_Temp",
+    "f10": "Autonomic_Stress_Index",
+    "f11": "RMSSD_Trend"
+  },
+  "regression_models": {
+    "Sleep_Quality": {
+      "model": "LinearRegression()",
+      "features": [
+        "RMSSD",
+        "HF",
+        "LF_HF_Ratio",
+        "Heart_Rate",
+        "Estimated_SpO2",
+        "Skin_Temperature"
+      ]
+    },
+    "Focus_Memory": {
+      "model": "LinearRegression()",
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "Heart_Rate",
+        "Heart_Rate_Variability_HRV"
+      ]
+    },
+    "Mental_Wellness": {
+      "model": "LinearRegression()",
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "HF",
+        "Heart_Rate"
+      ]
+    },
+    "Mood_Score": {
+      "model": "LinearRegression()",
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "HR_Trend",
+        "Skin_Temperature"
+      ]
+    },
+    "Metabolic_Syndrome_Risk": {
+      "model": "LinearRegression()",
+      "features": [
+        "RMSSD",
+        "Mean_EDA",
+        "Mean_Temp"
+      ]
+    },
+    "T2D_Metabolic_Risk_Index": {
+      "model": "LinearRegression()",
+      "features": [
+        "Mean_Temp",
+        "RMSSD"
+      ]
+    },
+    "Cardiovascular_Risk_Score": {
+      "model": "LinearRegression()",
+      "features": [
+        "RMSSD",
+        "Mean_EDA"
+      ]
+    },
+    "Heart_Failure_Alert_Score": {
+      "model": "LinearRegression()",
+      "features": [
+        "RMSSD_Trend",
+        "Mean_Temp"
+      ]
+    },
+    "Chronic_Stress_Severity": {
+      "model": "LinearRegression()",
+      "features": [
+        "Mean_EDA",
+        "RMSSD"
+      ]
+    },
+    "Infertility_Reproductive_Risk": {
+      "model": "LinearRegression()",
+      "features": [
+        "Autonomic_Stress_Index",
+        "RMSSD",
+        "Mean_EDA"
+      ]
+    }
+  },
+  "risk_models": {
+    "Sleep_Quality": {
+      "regressor": "RandomForestRegressor(n_estimators=300, n_jobs=1, random_state=42)",
+      "classifier": "RandomForestClassifier(n_estimators=300, n_jobs=1, random_state=42)",
+      "features": [
+        "RMSSD",
+        "HF",
+        "LF_HF_Ratio",
+        "Heart_Rate",
+        "Estimated_SpO2",
+        "Skin_Temperature"
+      ],
+      "score_column": "Sleep_Quality",
+      "scaler": {
+        "mean": [
+          61.71721160164218,
+          340.1435986107172,
+          0.9427265258334012,
+          80.48202752408922,
+          97.31498003821054,
+          34.14621760786775
+        ],
+        "scale": [
+          36.86501050682734,
+          204.22112924301268,
+          1.2556065168401165,
+          7.829916974539454,
+          3.291393992034456,
+          2.8007676103986583
+        ]
+      }
+    },
+    "Focus_Memory": {
+      "regressor": "RandomForestRegressor(n_estimators=300, n_jobs=1, random_state=42)",
+      "classifier": "RandomForestClassifier(n_estimators=300, n_jobs=1, random_state=42)",
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "Heart_Rate",
+        "Heart_Rate_Variability_HRV"
+      ],
+      "score_column": "Focus_Memory",
+      "scaler": {
+        "mean": [
+          61.71721160164218,
+          0.9427265258334012,
+          80.48202752408922,
+          35.44665167204463
+        ],
+        "scale": [
+          36.86501050682734,
+          1.2556065168401165,
+          7.829916974539454,
+          15.531151217909535
+        ]
+      }
+    },
+    "Mental_Wellness": {
+      "regressor": "RandomForestRegressor(n_estimators=300, n_jobs=1, random_state=42)",
+      "classifier": "RandomForestClassifier(n_estimators=300, n_jobs=1, random_state=42)",
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "HF",
+        "Heart_Rate"
+      ],
+      "score_column": "Mental_Wellness",
+      "scaler": {
+        "mean": [
+          61.71721160164218,
+          0.9427265258334012,
+          340.1435986107172,
+          80.48202752408922
+        ],
+        "scale": [
+          36.86501050682734,
+          1.2556065168401165,
+          204.22112924301268,
+          7.829916974539454
+        ]
+      }
+    },
+    "Mood_Check": {
+      "regressor": "RandomForestRegressor(n_estimators=300, n_jobs=1, random_state=42)",
+      "classifier": "RandomForestClassifier(n_estimators=300, n_jobs=1, random_state=42)",
+      "features": [
+        "RMSSD",
+        "LF_HF_Ratio",
+        "HR_Trend",
+        "Skin_Temperature"
+      ],
+      "score_column": "Mood_Score",
+      "scaler": {
+        "mean": [
+          61.71721160164218,
+          0.9427265258334012,
+          -0.04130347845077711,
+          34.14621760786775
+        ],
+        "scale": [
+          36.86501050682734,
+          1.2556065168401165,
+          8.458786818448495,
+          2.8007676103986583
+        ]
+      }
+    },
+    "Metabolic_Syndrome": {
+      "regressor": "RandomForestRegressor(n_estimators=300, n_jobs=1, random_state=42)",
+      "classifier": "RandomForestClassifier(n_estimators=300, n_jobs=1, random_state=42)",
+      "features": [
+        "RMSSD",
+        "Mean_EDA",
+        "Mean_Temp"
+      ],
+      "score_column": "Metabolic_Syndrome_Risk",
+      "scaler": {
+        "mean": [
+          61.71721160164218,
+          1.8815924605611796,
+          34.27045279749698
+        ],
+        "scale": [
+          36.86501050682734,
+          2.880056396412542,
+          2.7916015842771067
+        ]
+      }
+    },
+    "Type_2_Diabetes": {
+      "regressor": "RandomForestRegressor(n_estimators=300, n_jobs=1, random_state=42)",
+      "classifier": "RandomForestClassifier(n_estimators=300, n_jobs=1, random_state=42)",
+      "features": [
+        "Mean_Temp",
+        "RMSSD"
+      ],
+      "score_column": "T2D_Metabolic_Risk_Index",
+      "scaler": {
+        "mean": [
+          34.27045279749698,
+          61.71721160164218
+        ],
+        "scale": [
+          2.7916015842771067,
+          36.86501050682734
+        ]
+      }
+    },
+    "Cardiovascular_Disease": {
+      "regressor": "RandomForestRegressor(n_estimators=300, n_jobs=1, random_state=42)",
+      "classifier": "RandomForestClassifier(n_estimators=300, n_jobs=1, random_state=42)",
+      "features": [
+        "RMSSD",
+        "Mean_EDA"
+      ],
+      "score_column": "Cardiovascular_Risk_Score",
+      "scaler": {
+        "mean": [
+          61.71721160164218,
+          1.8815924605611796
+        ],
+        "scale": [
+          36.86501050682734,
+          2.880056396412542
+        ]
+      }
+    },
+    "Heart_Failure": {
+      "regressor": "RandomForestRegressor(n_estimators=300, n_jobs=1, random_state=42)",
+      "classifier": "RandomForestClassifier(n_estimators=300, n_jobs=1, random_state=42)",
+      "features": [
+        "RMSSD_Trend",
+        "Mean_Temp"
+      ],
+      "score_column": "Heart_Failure_Alert_Score",
+      "scaler": {
+        "mean": [
+          0.2138253994635314,
+          34.27045279749698
+        ],
+        "scale": [
+          39.122744708321044,
+          2.7916015842771067
+        ]
+      }
+    },
+    "Chronic_Stress": {
+      "regressor": "RandomForestRegressor(n_estimators=300, n_jobs=1, random_state=42)",
+      "classifier": "RandomForestClassifier(n_estimators=300, n_jobs=1, random_state=42)",
+      "features": [
+        "Mean_EDA",
+        "RMSSD"
+      ],
+      "score_column": "Chronic_Stress_Severity",
+      "scaler": {
+        "mean": [
+          1.8815924605611796,
+          61.71721160164218
+        ],
+        "scale": [
+          2.880056396412542,
+          36.86501050682734
+        ]
+      }
+    },
+    "Infertility": {
+      "regressor": "RandomForestRegressor(n_estimators=300, n_jobs=1, random_state=42)",
+      "classifier": "RandomForestClassifier(n_estimators=300, n_jobs=1, random_state=42)",
+      "features": [
+        "Autonomic_Stress_Index",
+        "RMSSD",
+        "Mean_EDA"
+      ],
+      "score_column": "Infertility_Reproductive_Risk",
+      "scaler": {
+        "mean": [
+          0.041941701501394944,
+          61.71721160164218,
+          1.8815924605611796
+        ],
+        "scale": [
+          0.08131075510597865,
+          36.86501050682734,
+          2.880056396412542
+        ]
+      }
+    }
+  },
+  "mood_model": "MLPClassifier(early_stopping=True, hidden_layer_sizes=(64, 32), max_iter=500,\n              random_state=42)"
+}
