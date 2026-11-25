@@ -706,6 +706,172 @@ Retrieves metadata about rPPG v8 features and targets.
 
 **Response:** Metadata about available features and prediction targets.
 
+## Onboarding API
+
+Step-based onboarding flow ported from AIMHER. Steps 1–5 are required,
+step 6 (rPPG baseline) is optional-but-recommended, and
+`POST /onboarding/complete` finalises the flow.
+
+> **Note:** Step 7 (PHC / LGA / emergency-hospital selection) is intentionally
+> **not** implemented in this backend. `PATCH /onboarding/step/7` and
+> `PATCH /onboarding/direct/step/7` return `404`.
+
+All endpoints require JWT auth and return the standard envelope.
+All step payloads are partial (`PATCH`-style): send only the fields for that step.
+
+### 16. Step 1 – Personal Info
+
+**Endpoint:** `PATCH /onboarding/step/1` (alias: `PATCH /onboarding/direct/step/1`)
+
+**Request Body:**
+```json
+{
+  "full_name": "Jane Doe",
+  "date_of_birth": "1995-06-15",
+  "age": 31,
+  "nationality": "Nigerian",
+  "ethnicity": "nigerian",
+  "gender": "female",
+  "phone_number": "08012345678",
+  "blood_group": "O+",
+  "genotype": "AA"
+}
+```
+
+All fields optional. `age` must be 10–120; `date_of_birth` must resolve to
+age 10–120 (`age` is recomputed from `date_of_birth` on save).
+
+**Response `data`:** the submitted step-1 fields (snake_case).
+
+### 17. Step 2 – Physical Measurements
+
+**Endpoint:** `PATCH /onboarding/step/2` (alias: `PATCH /onboarding/direct/step/2`)
+
+**Request Body:**
+```json
+{ "height_cm": 165, "weight_kg": 60 }
+```
+
+`height_cm` 50–300, `weight_kg` 20–500. `bmi` is computed automatically.
+
+**Response `data`:**
+```json
+{
+  "height_cm": 165,
+  "weight_kg": 60,
+  "bmi": 22,
+  "onboarding_completed": false,
+  "onboarding_step": 2
+}
+```
+
+### 18. Step 3 – Skin Changes
+
+**Endpoint:** `PATCH /onboarding/step/3` (alias: `PATCH /onboarding/direct/step/3`)
+
+**Request Body:**
+```json
+{
+  "has_skin_changes": false,
+  "acanthosis_nigricans": "no",
+  "skin_tags": "no",
+  "scalp_hair_thinning": "no"
+}
+```
+
+`acanthosis_nigricans`: `yes` | `no` | `not_sure`
+`skin_tags`: `yes` | `no`
+`scalp_hair_thinning`: `yes` | `no` | `unsure`
+
+`has_skin_changes` is recomputed from `acanthosis_nigricans === "yes"` on save.
+
+### 19. Step 4 – Menstrual History
+
+**Endpoint:** `PATCH /onboarding/step/4` (alias: `PATCH /onboarding/direct/step/4`)
+
+**Request Body:**
+```json
+{
+  "cycle_length_days": 28,
+  "periods_per_year": 12,
+  "cycle_regularity": "regular",
+  "bleeding_intensity": "medium",
+  "last_period_date": "2026-11-01"
+}
+```
+
+`cycle_length_days` 1–90, `periods_per_year` 0–14.
+`cycle_regularity`: `regular` | `irregular` | `not_sure`
+`bleeding_intensity`: `spotting` | `light` | `medium` | `heavy` | `very_heavy`
+
+**Skipped for male users:** if `gender === "male"`, the step is bypassed,
+`onboarding_step` still advances, and `data` is `{}`.
+
+### 20. Step 5 – Wearable Setup
+
+**Endpoint:** `PATCH /onboarding/step/5` (alias: `PATCH /onboarding/direct/step/5`)
+
+**Request Body:**
+```json
+{ "selected_wearable": "apple_watch" }
+```
+
+`selected_wearable`: `apple_watch` | `fitbit` | `garmin` | `oura_ring` | `none`
+
+### 21. Step 6 – rPPG Baseline
+
+**Endpoint:** `POST /onboarding/step/6/rppg`
+
+**Request Body:**
+```json
+{ "baseline_captured": true }
+```
+
+`baseline_captured` must be `true` (otherwise `400`). Sets
+`rppg_baseline_captured` and `rppg_captured_at`, advances the step.
+
+### 22. Complete Onboarding
+
+**Endpoint:** `POST /onboarding/complete` (alias: `POST /onboarding/direct/complete`)
+
+No body. Sets `onboarding_completed = true` and
+`onboarding_step = max(current, 6)`.
+
+**Response `data`:**
+```json
+{
+  "redirect": "/dashboard",
+  "onboarding_completed": true,
+  "onboarding_step": 6,
+  "profile": { }
+}
+```
+
+### 23. Get Onboarding Profile
+
+**Endpoint:** `GET /onboarding/profile`
+
+Returns the full profile (all step fields, computed `bmi`/`age`,
+`onboarding_completed`, `onboarding_step`, `completion_percentage`,
+`created_at`, `updated_at`). Creates an empty profile if none exists.
+
+### 24. Update Onboarding Profile
+
+**Endpoint:** `PATCH /onboarding/profile/update`
+
+Partially updates any profile field **without** advancing
+`onboarding_step`. Accepts the union of all step fields plus the
+additional clinical fields:
+
+- `waist_cm`, `hip_cm` (numbers)
+- `night_sweats`: `none` | `occasional` | `frequent` | `every_night`
+- `fatigue_level`: `none` | `mild` | `moderate` | `severe`
+- `family_history`: array
+- `high_blood_pressure`: `yes` | `no` | `not_sure`
+- `rppg_baseline_captured`, `rppg_captured_at`
+
+**Response `data`:** the full serialized profile.
+
 ## Enums
 
 ### Cycle Phase

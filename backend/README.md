@@ -58,8 +58,19 @@ The rPPG v8 ONNX models and metadata live under `backend/inference/models/rppg_v
 | GET    | /api/rppg-v8/sessions    | JWT  | List recent passive-sensing sessions (`?limit=`) |
 | GET    | /api/rppg-v8/predictions | JWT  | List recent v8 prediction results |
 | GET    | /api/rppg-v8/metadata    | JWT  | List v8 model features/targets/scalers metadata |
+| PATCH  | /api/onboarding/step/1   | JWT  | Onboarding step 1 – personal info (`direct/step/1` alias) |
+| PATCH  | /api/onboarding/step/2   | JWT  | Onboarding step 2 – physical measurements |
+| PATCH  | /api/onboarding/step/3   | JWT  | Onboarding step 3 – skin changes |
+| PATCH  | /api/onboarding/step/4   | JWT  | Onboarding step 4 – menstrual history (skipped for males) |
+| PATCH  | /api/onboarding/step/5   | JWT  | Onboarding step 5 – wearable setup |
+| POST   | /api/onboarding/step/6/rppg | JWT | Onboarding step 6 – mark rPPG baseline captured |
+| POST   | /api/onboarding/complete | JWT  | Mark onboarding complete (`direct/complete` alias) |
+| GET    | /api/onboarding/profile  | JWT  | Full onboarding profile |
+| PATCH  | /api/onboarding/profile/update | JWT | Update profile fields without advancing steps |
 
-See `docs/API_SPECIFICATION.md` for the full symptom-logging API contract.
+> Onboarding step 7 (LGA / PHC / emergency-hospital selection) is intentionally not implemented.
+
+See `docs/API_SPECIFICATION.md` for the full API contract.
 
 ### Prediction request body
 
