@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { getSeverity } from '@/lib/symptoms';
+import type { CSSProperties } from 'react';
 
 interface VASSliderProps {
   label: string;
@@ -11,8 +10,16 @@ interface VASSliderProps {
   min?: number;
   max?: number;
   step?: number;
+  unit?: string;
   lowLabel?: string;
   highLabel?: string;
+}
+
+function palette(percent: number) {
+  if (percent <= 20) return { color: '#2f9e63', bg: '#e8f6ee', label: 'Low' };
+  if (percent <= 45) return { color: '#d39a22', bg: '#fff5df', label: 'Mild' };
+  if (percent <= 70) return { color: '#e07a2d', bg: '#fff0e3', label: 'Moderate' };
+  return { color: '#d94a55', bg: '#fdecee', label: 'High' };
 }
 
 export default function VASSlider({
@@ -23,70 +30,52 @@ export default function VASSlider({
   min = 0,
   max = 10,
   step = 1,
+  unit = '',
   lowLabel = 'None',
   highLabel = 'Severe',
 }: VASSliderProps) {
-  const [dragging, setDragging] = useState(false);
-  const percentage = ((value - min) / (max - min)) * 100;
-  const sev = getSeverity(value);
+  const percent = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+  const tone = palette(percent);
+  const style = {
+    '--vas-color': tone.color,
+    '--vas-bg': tone.bg,
+    '--vas-fill': `${percent}%`,
+  } as CSSProperties;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-2">
+    <div className="vas-item" style={style}>
+      <div className="vas-head">
         <div>
-          <p className="font-semibold text-gray-900 text-sm">{label}</p>
-          {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
+          <label htmlFor={`vas-${label.replace(/\s+/g, '-').toLowerCase()}`}>{label}</label>
+          {description && <p>{description}</p>}
         </div>
-        <div className="min-w-[3rem] text-right shrink-0">
-          <span
-            className="text-2xl font-bold tabular-nums transition-colors"
-            style={{ color: sev.color }}
-          >
-            {value}
-          </span>
-          <span className="text-xs text-gray-400">/{max}</span>
+        <div className="vas-value">
+          <b>{Number.isInteger(value) ? value : value.toFixed(1)}</b>
+          {unit && <small>{unit}</small>}
         </div>
       </div>
 
-      <div className="relative pt-1 pb-2">
-        <div className="h-3 rounded-full bg-gray-200 overflow-hidden relative">
-          <div
-            className="h-full rounded-full transition-[width] duration-150"
-            style={{ width: `${percentage}%`, backgroundColor: sev.color }}
-          />
+      <div className="vas-track">
+        <div className="vas-rail">
+          <div className="vas-fill" />
         </div>
         <input
+          id={`vas-${label.replace(/\s+/g, '-').toLowerCase()}`}
+          className="vas-input"
           type="range"
           min={min}
           max={max}
           step={step}
           value={value}
-          onChange={(e) => {
-            const v = parseFloat(e.target.value);
-            onChange(step < 1 ? Math.round(v * 10) / 10 : Math.round(v));
-          }}
-          onPointerDown={() => setDragging(true)}
-          onPointerUp={() => setDragging(false)}
-          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-          style={{ top: '4px' }}
+          onChange={(e) => onChange(Number(e.target.value))}
           aria-label={label}
         />
-        <div
-          className={`absolute top-1 h-3 w-3 -ml-1.5 pointer-events-none transition-transform ${
-            dragging ? 'scale-125' : ''
-          }`}
-          style={{ left: `${percentage}%` }}
-        >
-          <div
-            className="h-5 w-5 -mt-1 rounded-full border-2 bg-white shadow-md transition-colors"
-            style={{ borderColor: sev.color }}
-          />
-        </div>
+        <div className="vas-thumb" />
       </div>
-
-      <div className="flex justify-between">
-        <span className="text-xs text-gray-400">{lowLabel}</span>
-        <span className="text-xs text-gray-400">{highLabel}</span>
+      <div className="vas-labels">
+        <span>{lowLabel}</span>
+        <span className="vas-scale">{tone.label}</span>
+        <span>{highLabel}</span>
       </div>
     </div>
   );

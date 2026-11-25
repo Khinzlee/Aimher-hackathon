@@ -55,6 +55,14 @@ export const SYMPTOMS: Symptom[] = [
   { id: 'abnormal_bleeding', label: 'Abnormal Bleeding', description: 'Bleeding between periods or after menopause', lowLabel: 'None', highLabel: 'Heavy', icon: 'Droplet' },
   { id: 'pelvic_pressure_mass', label: 'Pelvic Pressure / Mass', description: 'Feeling of fullness or pressure in the pelvis', lowLabel: 'None', highLabel: 'Severe', icon: 'CircleDot' },
   { id: 'pelvic_pain_ec', label: 'Pelvic / Lower Abdominal Pain', description: 'Persistent pain in the pelvis or lower abdomen', lowLabel: 'None', highLabel: 'Severe', icon: 'Stethoscope' },
+  // API spec — seven symptom intensity variables
+  { id: 'breast_soreness_vas', label: 'Breast Soreness', description: 'VAS score for breast tenderness', lowLabel: 'None', highLabel: 'Severe', icon: 'Heart' },
+  { id: 'painful_touch_vas', label: 'Painful Touch', description: 'VAS score for touch sensitivity', lowLabel: 'None', highLabel: 'Severe', icon: 'Activity' },
+  { id: 'pelvic_pressure_vas', label: 'Pelvic Pressure', description: 'VAS score for pelvic heaviness or pressure', lowLabel: 'None', highLabel: 'Severe', icon: 'CircleDot' },
+  { id: 'bloating_delta_cm', label: 'Bloating', description: 'Change in abdominal girth', lowLabel: 'No change', highLabel: '+10 cm', icon: 'Droplets' },
+  { id: 'fatigue_mfi5_vas', label: 'Fatigue (MFI-5)', description: 'Multidimensional fatigue VAS score', lowLabel: 'Energized', highLabel: 'Exhausted', icon: 'Zap' },
+  { id: 'acne_severity_likert', label: 'Acne Severity', description: 'Likert score from 0 (clear) to 4 (severe)', lowLabel: 'Clear', highLabel: 'Severe', icon: 'Droplet' },
+  { id: 'hirsutism_mfg_score', label: 'Hirsutism (mFG)', description: 'Modified Ferriman-Gallwey score, 0–36', lowLabel: '0', highLabel: '36', icon: 'Activity' },
 ];
 
 export const CONDITIONS: Condition[] = [
@@ -66,7 +74,7 @@ export const CONDITIONS: Condition[] = [
     disclaimer: 'Symptom burden only — not a fertility diagnosis. Cycle tracking and clinical evaluation are needed.',
     icon: 'Target',
     color: '#8B5CF6',
-    symptomIds: ['cycle_irregularity', 'pelvic_pain', 'low_libido'],
+    symptomIds: ['cycle_irregularity', 'pelvic_pain', 'low_libido', 'pelvic_pressure_vas', 'acne_severity_likert', 'hirsutism_mfg_score'],
   },
   {
     id: 'dysmenorrhea',
@@ -76,7 +84,7 @@ export const CONDITIONS: Condition[] = [
     disclaimer: 'Symptom burden only — severe or worsening pain warrants clinical review.',
     icon: 'Thermometer',
     color: '#F97316',
-    symptomIds: ['period_cramps', 'back_pain', 'pain_interference'],
+    symptomIds: ['period_cramps', 'back_pain', 'pain_interference', 'breast_soreness_vas', 'painful_touch_vas', 'pelvic_pressure_vas'],
   },
   {
     id: 'pmdd',
@@ -86,7 +94,7 @@ export const CONDITIONS: Condition[] = [
     disclaimer: 'Symptom burden only — PMDD requires clinical assessment across at least two cycles.',
     icon: 'Moon',
     color: '#6366F1',
-    symptomIds: ['mood_swings', 'irritability', 'sleep_disruption'],
+    symptomIds: ['mood_swings', 'irritability', 'sleep_disruption', 'fatigue_mfi5_vas', 'bloating_delta_cm'],
   },
   {
     id: 't2d',
@@ -96,7 +104,7 @@ export const CONDITIONS: Condition[] = [
     disclaimer: 'Symptom burden only — diabetes diagnosis requires blood tests (e.g. HbA1c).',
     icon: 'Droplets',
     color: '#0EA5E9',
-    symptomIds: ['fatigue', 'thirst_hunger', 'energy_crashes'],
+    symptomIds: ['fatigue', 'thirst_hunger', 'energy_crashes', 'fatigue_mfi5_vas', 'bloating_delta_cm'],
   },
   {
     id: 'cvd',
@@ -106,7 +114,7 @@ export const CONDITIONS: Condition[] = [
     disclaimer: 'Symptom burden only — chest symptoms require urgent medical evaluation.',
     icon: 'HeartPulse',
     color: '#EF4444',
-    symptomIds: ['chest_discomfort', 'shortness_of_breath', 'palpitations'],
+    symptomIds: ['chest_discomfort', 'shortness_of_breath', 'palpitations', 'fatigue_mfi5_vas'],
     redFlagSymptomId: 'chest_discomfort',
     redFlagThreshold: 7,
     redFlagMessage: 'High chest discomfort reported — if this is happening now, seek emergency care.',
@@ -119,7 +127,7 @@ export const CONDITIONS: Condition[] = [
     disclaimer: 'Abnormal bleeding is a red flag — consult a clinician promptly. Symptom logging cannot screen for cancer.',
     icon: 'Stethoscope',
     color: '#DC2626',
-    symptomIds: ['abnormal_bleeding', 'pelvic_pressure_mass', 'pelvic_pain_ec'],
+    symptomIds: ['abnormal_bleeding', 'pelvic_pressure_mass', 'pelvic_pain_ec', 'pelvic_pressure_vas'],
     redFlagSymptomId: 'abnormal_bleeding',
     redFlagThreshold: 4,
     redFlagMessage: 'Abnormal bleeding reported — please consult a clinician.',
@@ -168,115 +176,12 @@ export function computeConditionBurden(
   return present.reduce((a, b) => a + b, 0) / present.length;
 }
 
-// ─── API spec model (backend contract) ─────────────────────────────────────
-// POST /symptoms and POST /predictions/from-symptoms use these 9 fields.
-
-export type CyclePhase = 'Menstrual' | 'Follicular' | 'Ovulatory' | 'Luteal';
-
-export const CYCLE_PHASES: { value: CyclePhase; label: string; days: string }[] = [
-  { value: 'Menstrual', label: 'Menstrual', days: 'Days 1–5' },
-  { value: 'Follicular', label: 'Follicular', days: 'Days 6–13' },
-  { value: 'Ovulatory', label: 'Ovulatory', days: 'Days 14–16' },
-  { value: 'Luteal', label: 'Luteal', days: 'Days 17–28' },
-];
+export const CYCLE_PHASES = ['Menstrual', 'Follicular', 'Ovulatory', 'Luteal'] as const;
+export type CyclePhase = typeof CYCLE_PHASES[number];
 
 export function cyclePhaseForDay(day: number): CyclePhase {
   if (day <= 5) return 'Menstrual';
   if (day <= 13) return 'Follicular';
   if (day <= 16) return 'Ovulatory';
   return 'Luteal';
-}
-
-export interface SymptomPayload {
-  day_of_cycle: number;
-  cycle_phase: CyclePhase;
-  breast_soreness_vas: number;
-  painful_touch_vas: number;
-  pelvic_pressure_vas: number;
-  bloating_delta_cm: number;
-  fatigue_mfi5_vas: number;
-  acne_severity_likert: number;
-  hirsutism_mfg_score: number;
-}
-
-export const EMPTY_PAYLOAD: SymptomPayload = {
-  day_of_cycle: 1,
-  cycle_phase: 'Follicular',
-  breast_soreness_vas: 0,
-  painful_touch_vas: 0,
-  pelvic_pressure_vas: 0,
-  bloating_delta_cm: 0,
-  fatigue_mfi5_vas: 0,
-  acne_severity_likert: 0,
-  hirsutism_mfg_score: 0,
-};
-
-/** Disease keys returned by POST /predictions/from-symptoms */
-export const API_DISEASE_KEYS = [
-  'Infertility',
-  'Dysmenorrhea',
-  'PMDD',
-  'T2D',
-  'CVD',
-  'Endometrial',
-] as const;
-
-export type ApiDiseaseKey = (typeof API_DISEASE_KEYS)[number];
-
-/** probability → Low / Moderate / High (spec: <0.33, <0.66, ≥0.66) */
-export function probabilitySeverity(p: number): Severity {
-  if (p < 0.33) return { label: 'Low', color: '#16A34A', bg: '#F0FDF4' };
-  if (p < 0.66) return { label: 'Moderate', color: '#D97706', bg: '#FFFBEB' };
-  return { label: 'High', color: '#DC2626', bg: '#FEF2F2' };
-}
-
-/** riskScore → Minimal / Mild / Moderate / Severe (spec: <0.2, <0.4, <0.6, ≥0.6) */
-export function riskScoreSeverity(s: number): Severity {
-  if (s < 0.2) return { label: 'Minimal', color: '#16A34A', bg: '#F0FDF4' };
-  if (s < 0.4) return { label: 'Mild', color: '#2563EB', bg: '#EFF6FF' };
-  if (s < 0.6) return { label: 'Moderate', color: '#D97706', bg: '#FFFBEB' };
-  return { label: 'Severe', color: '#DC2626', bg: '#FEF2F2' };
-}
-
-/** symptomBurdenScore is on a 0–10 scale — reuse VAS bands */
-export function burdenSeverity(score: number): Severity {
-  return getSeverity(score);
-}
-
-/** Map an API disease key to the UI condition id used in /conditions/[id] */
-export function diseaseRouteId(key: string): string {
-  const map: Record<string, string> = {
-    Infertility: 'infertility',
-    Dysmenorrhea: 'dysmenorrhea',
-    PMDD: 'pmdd',
-    T2D: 't2d',
-    CVD: 'cvd',
-    Endometrial: 'endometrial',
-  };
-  return map[key] ?? key.toLowerCase();
-}
-
-// ─── Disease view-models for prediction UI ─────────────────────────────────
-
-export interface DiseaseInfo extends Condition {
-  /** API prediction key, e.g. "Infertility", "Endometrial" */
-  key: string;
-}
-
-const API_KEY_BY_CONDITION: Record<string, string> = {
-  infertility: 'Infertility',
-  dysmenorrhea: 'Dysmenorrhea',
-  pmdd: 'PMDD',
-  t2d: 'T2D',
-  cvd: 'CVD',
-  endometrial: 'Endometrial',
-};
-
-export const DISEASES: DiseaseInfo[] = CONDITIONS.map((c) => ({
-  ...c,
-  key: API_KEY_BY_CONDITION[c.id] ?? c.id,
-}));
-
-export function diseaseByRouteId(id: string): DiseaseInfo | undefined {
-  return DISEASES.find((d) => diseaseRouteId(d.key) === id || d.key.toLowerCase() === id);
 }

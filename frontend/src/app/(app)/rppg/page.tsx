@@ -1,148 +1,74 @@
-/* eslint-disable react-hooks/set-state-in-effect, react-hooks/immutability, react-hooks/purity, react-hooks/exhaustive-deps, react-hooks/preserve-manual-memoization, @typescript-eslint/no-explicit-any, react/no-unescaped-entities -- verbatim port from Aimher pcos-pathfinder */
 "use client";
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
-import { ArrowLeft, Camera, Activity, Heart, Thermometer, Droplets, BarChart3, TrendingUp, Brain, Moon, AlertTriangle, Shield, Clock, Sparkles } from 'lucide-react';
-import { rppgV8Service, RppgV8Session, RppgV8PredictAllResult } from '@/services/rppgV8Service';
+import {
+  Activity, ArrowLeft, Brain, Camera, Clock, RefreshCw, Sparkles,
+} from 'lucide-react';
+import {
+  rppgV8Service, REGRESSION_TARGETS,
+  type RppgV8Session,
+} from '@/services/rppgV8Service';
+import { useNow } from '@/hooks/useNow';
 
-const TEAL_PRIMARY = '#00897B';
-
-const getSeverityColor = (score: number): string => {
-  if (score >= 0.7) return '#ef4444';
-  if (score >= 0.5) return '#f97316';
-  if (score >= 0.3) return '#eab308';
-  return '#22c55e';
-};
-
-const getPositiveColor = (value: number): string => {
-  if (value >= 70) return '#22c55e';
-  if (value >= 50) return '#eab308';
-  return '#ef4444';
-};
-
-const isRiskTarget = (target: string): boolean => {
+function isRiskTarget(target: string): boolean {
   const t = target.toLowerCase();
   return t.includes('risk') || t.includes('stress') || t.includes('failure') || t.includes('syndrome');
-};
+}
 
-const getSeverityLabel = (score: number): string => {
-  if (score >= 0.7) return 'High';
-  if (score >= 0.5) return 'Moderate';
-  if (score >= 0.3) return 'Mild';
-  return 'Low';
-};
-
-const getRegressionInterpretation = (target: string, value: number): string => {
+function interpretation(target: string, value: number): string {
   const t = target.toLowerCase();
-  if (t.includes('sleep_quality')) {
-    if (value >= 70) return 'Good sleep quality';
-    if (value >= 50) return 'Moderate — room for improvement';
-    return 'Poor — consider sleep hygiene';
+  if (t.includes('sleep')) return value >= 70 ? 'Restorative sleep' : value >= 50 ? 'Room to improve' : 'Prioritise sleep';
+  if (t.includes('focus')) return value >= 70 ? 'Sharp focus' : value >= 50 ? 'Steady focus' : 'Focus may be dipping';
+  if (t.includes('mental')) return value >= 70 ? 'Feeling well' : value >= 50 ? 'Monitor stress' : 'Needs attention';
+  if (t.includes('risk') || t.includes('stress') || t.includes('failure')) {
+    return value >= 60 ? 'Elevated — keep monitoring' : value >= 40 ? 'Mild — stay on track' : 'Low risk';
   }
-  if (t.includes('focus_memory')) {
-    if (value >= 70) return 'Sharp focus & memory';
-    if (value >= 50) return 'Moderate cognitive function';
-    return 'Below average — stress may be impacting focus';
-  }
-  if (t.includes('mental_wellness')) {
-    if (value >= 70) return 'Good mental wellness';
-    if (value >= 50) return 'Moderate — monitor stress levels';
-    return 'Needs attention — consider wellness activities';
-  }
-  if (t.includes('mood_score')) {
-    if (value >= 70) return 'Good mood stability';
-    if (value >= 50) return 'Moderate mood';
-    return 'Mood may be affected — check in with yourself';
-  }
-  if (t.includes('metabolic_syndrome')) {
-    if (value >= 60) return 'Elevated risk — monitor closely';
-    if (value >= 40) return 'Mild risk — maintain healthy habits';
-    return 'Low risk — keep it up';
-  }
-  if (t.includes('t2d') || t.includes('metabolic_risk')) {
-    if (value >= 60) return 'Elevated metabolic risk';
-    if (value >= 40) return 'Mild risk — stay active';
-    return 'Low risk';
-  }
-  if (t.includes('cardiovascular')) {
-    if (value >= 60) return 'Elevated cardiovascular risk';
-    if (value >= 40) return 'Mild risk — HRV supports heart health';
-    return 'Low risk — good cardiac markers';
-  }
-  if (t.includes('heart_failure')) {
-    if (value >= 60) return 'Elevated alert — consult a doctor';
-    if (value >= 40) return 'Mild concern — monitor symptoms';
-    return 'Low risk — no alerts';
-  }
-  if (t.includes('chronic_stress')) {
-    if (value >= 60) return 'High stress — prioritise rest';
-    if (value >= 40) return 'Mild stress — some recovery needed';
-    return 'Low stress — well regulated';
-  }
-  if (t.includes('infertility') || t.includes('reproductive')) {
-    if (value >= 60) return 'Elevated reproductive risk';
-    if (value >= 40) return 'Moderate — monitor cycle patterns';
-    return 'Low risk — reproductive health stable';
-  }
-  return '';
-};
+  return value >= 70 ? 'Strong result' : value >= 50 ? 'Moderate result' : 'Needs attention';
+}
 
-const formatTimeRemaining = (ms: number): string => {
+function formatRemaining(ms: number): string {
   const hours = Math.floor(ms / 3600000);
   const minutes = Math.floor((ms % 3600000) / 60000);
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
-};
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
 
-const RppgPassiveSensing = () => {
+export default function RppgPassiveSensing() {
   const router = useRouter();
   const queryClient = useQueryClient();
-
+  const now = useNow();
   const [nextCaptureAt, setNextCaptureAt] = useState<number | null>(null);
   const [timeRemaining, setTimeRemaining] = useState('');
 
-  // React Query for sessions (5 min cache)
-  const { data: sessionsData, isLoading: sessionsLoading, error: sessionsError } = useQuery({
+  const { data: sessionsData, isLoading, error: sessionsError } = useQuery({
     queryKey: ['rppg-v8-sessions'],
     queryFn: () => rppgV8Service.getSessions(),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 5 * 60 * 1000,
   });
-
-  // React Query for predictions (2 min cache)
-  const { data: predictionsData, isLoading: predictionsLoading, error: predictionsError } = useQuery({
+  const { data: predictionsData, error: predictionsError } = useQuery({
     queryKey: ['rppg-v8-predictions'],
     queryFn: () => rppgV8Service.predictAll(),
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 2 * 60 * 1000,
   });
 
-  const sessions = sessionsData?.data?.sessions ?? [];
+  const sessions: RppgV8Session[] = sessionsData?.data?.sessions ?? [];
   const predictions = predictionsData?.data ?? null;
-  const loading = sessionsLoading;
-  const error = sessionsError?.message || predictionsError?.message || null;
-
-  const handleRefresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['rppg-v8-sessions'] });
-    queryClient.invalidateQueries({ queryKey: ['rppg-v8-predictions'] });
-  };
+  const error = sessionsError?.message ?? predictionsError?.message ?? null;
 
   useEffect(() => {
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     if (isLocal) {
       localStorage.removeItem('nextRppgV8CaptureAt');
-      localStorage.removeItem('nextRppgCaptureAt');
-    } else {
-      const stored = localStorage.getItem('nextRppgV8CaptureAt');
-      if (stored) {
-        const ts = parseInt(stored, 10);
-        if (ts > Date.now()) {
-          setNextCaptureAt(ts);
-        } else {
-          localStorage.removeItem('nextRppgV8CaptureAt');
-        }
-      }
+      return;
+    }
+    const stored = localStorage.getItem('nextRppgV8CaptureAt');
+    if (stored) {
+      const ts = Number(stored);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (ts > Date.now()) setNextCaptureAt(ts);
+      else localStorage.removeItem('nextRppgV8CaptureAt');
     }
   }, []);
 
@@ -151,11 +77,10 @@ const RppgPassiveSensing = () => {
     const update = () => {
       const remaining = nextCaptureAt - Date.now();
       if (remaining <= 0) {
-        setTimeRemaining('Ready');
-        localStorage.removeItem('nextRppgV8CaptureAt');
         setNextCaptureAt(null);
+        localStorage.removeItem('nextRppgV8CaptureAt');
       } else {
-        setTimeRemaining(formatTimeRemaining(remaining));
+        setTimeRemaining(formatRemaining(remaining));
       }
     };
     update();
@@ -163,302 +88,214 @@ const RppgPassiveSensing = () => {
     return () => clearInterval(id);
   }, [nextCaptureAt]);
 
-  // Today's averages from most recent sessions
-  const todaySessions = sessions.filter(s => {
-    const d = new Date(s.capturedAt);
-    const now = new Date();
-    return d.toDateString() === now.toDateString();
-  });
+  const todaySessions = now
+    ? sessions.filter((s) => new Date(s.capturedAt).toDateString() === now.toDateString())
+    : [];
 
   const avg = (field: keyof RppgV8Session, decimals = 1): string => {
     if (!todaySessions.length) return '--';
-    const vals = todaySessions.map(s => s[field]).filter((v): v is number => v !== null && v !== undefined);
-    if (!vals.length) return '--';
-    return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(decimals);
+    const values = todaySessions
+      .map((s) => s[field])
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    if (!values.length) return '--';
+    return (values.reduce((a, b) => a + b, 0) / values.length).toFixed(decimals);
   };
 
-  const latestSession = sessions.length > 0 ? sessions[0] : null;
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ['rppg-v8-sessions'] });
+    queryClient.invalidateQueries({ queryKey: ['rppg-v8-predictions'] });
+  };
+
+  const latest = sessions[0] ?? null;
+  const waiting = Boolean(nextCaptureAt && now && now.getTime() < nextCaptureAt);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="px-6 pt-8 pb-6" style={{ backgroundColor: TEAL_PRIMARY }}>
-        <div className="flex items-center gap-3">
-          <button onClick={() => router.push('/dashboard')} className="text-white/80 hover:text-white">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-xl font-bold text-white font-[var(--font-display)]">Passive Sensing</h1>
+    <div className="clin-page">
+      <div className="clin-wrap">
+        <div className="clin-top">
+          <Link href="/dashboard" className="clin-back">
+            <ArrowLeft size={17} /> Back to dashboard
+          </Link>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="" className="clin-mark" />
         </div>
-        <p className="text-white/70 text-sm ml-8 mt-1">rPPG v8 — Autonomic health monitoring</p>
-      </div>
 
-      <div className="px-6 py-6 max-w-md mx-auto space-y-6">
-        {error && (
-          <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">{error}</div>
-        )}
+        <section className="clin-hero">
+          <span className="clin-kicker">rPPG passive sensing</span>
+          <h1>Your vitals, quietly tracked.</h1>
+          <p>Camera-based physiological sensing powers ten wellness and risk insights.</p>
+        </section>
 
-        {/* Status Card */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-gray-200 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5" style={{ color: TEAL_PRIMARY }} />
-              <h2 className="font-semibold text-gray-900">Capture Status</h2>
+        {error && <div className="clin-alert" style={{ marginTop: 14 }}>{error}</div>}
+
+        <div className="clin-section">
+          <div className="clin-card">
+            <div className="clin-card-head">
+              <div>
+                <h2>Capture status</h2>
+                <p>{waiting ? `Next capture in ${timeRemaining}` : 'Ready when you are — about 2 minutes.'}</p>
+              </div>
+              <div className="clin-card-ico"><Clock size={19} /></div>
             </div>
-            {nextCaptureAt ? (
-              <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">Next in {timeRemaining}</span>
-            ) : (
-              <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">Ready</span>
-            )}
+            <div className="clin-actions">
+              <button
+                type="button"
+                className="clin-btn"
+                onClick={() => router.push('/rppg/capture')}
+                disabled={waiting}
+              >
+                <Camera size={17} /> {waiting ? 'Please wait' : 'Start capture'}
+              </button>
+              <button type="button" className="clin-btn ghost" onClick={refresh}>
+                <RefreshCw size={16} /> Refresh
+              </button>
+            </div>
           </div>
-          <div className="flex gap-3">
-            <Button
-              onClick={() => router.push('/rppg/capture')}
-              className="flex-1 h-11 rounded-xl text-white font-semibold text-sm"
-              style={{ backgroundColor: TEAL_PRIMARY }}
-              disabled={!!nextCaptureAt && Date.now() < nextCaptureAt}
-            >
-              <Camera className="w-4 h-4 mr-2" />
-              {nextCaptureAt && Date.now() < nextCaptureAt ? 'Waiting...' : 'Start Capture'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleRefresh}
-              className="h-11 rounded-xl text-sm"
-              disabled={loading}
-            >
-              <Activity className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
-        </motion.div>
+        </div>
 
-        {loading ? (
-          <div className="text-center py-12 text-gray-400">Loading...</div>
+        {isLoading ? (
+          <div className="clin-section">
+            <div className="clin-card clin-empty">Loading your readings…</div>
+          </div>
+        ) : sessions.length === 0 ? (
+          <div className="clin-section">
+            <div className="clin-card clin-empty">
+              <div className="empty-ico"><Camera size={28} /></div>
+              <h3>No sessions yet</h3>
+              <p>Start a capture to see your heart rate, HRV, oxygen saturation and wellness insights.</p>
+              <button type="button" className="clin-btn" onClick={() => router.push('/rppg/capture')}>
+                <Camera size={17} /> Start your first capture
+              </button>
+            </div>
+          </div>
         ) : (
           <>
-            {/* Today's Averages */}
-            {todaySessions.length > 0 && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-gray-200 p-5">
-                <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Heart className="w-4 h-4" style={{ color: TEAL_PRIMARY }} />
-                  Today's Averages ({todaySessions.length} session{todaySessions.length > 1 ? 's' : ''})
-                </h2>
-                <div className="grid grid-cols-4 gap-3">
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500">HR</p>
-                    <p className="text-lg font-bold text-gray-900">{avg('heartRate', 0)}</p>
-                    <p className="text-xs text-gray-400">bpm</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500">RMSSD</p>
-                    <p className="text-lg font-bold text-gray-900">{avg('rmssd', 1)}</p>
-                    <p className="text-xs text-gray-400">ms</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500">HRV</p>
-                    <p className="text-lg font-bold text-gray-900">{avg('hrv', 1)}</p>
-                    <p className="text-xs text-gray-400">ms</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500">SpO₂</p>
-                    <p className="text-lg font-bold text-gray-900">{avg('estimatedSpO2', 0)}</p>
-                    <p className="text-xs text-gray-400">%</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500">Temp</p>
-                    <p className="text-lg font-bold text-gray-900">{avg('skinTemperature', 1)}</p>
-                    <p className="text-xs text-gray-400">°C</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500">EDA</p>
-                    <p className="text-lg font-bold text-gray-900">{avg('meanEda', 1)}</p>
-                    <p className="text-xs text-gray-400">µS</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500">LF/HF</p>
-                    <p className="text-lg font-bold text-gray-900">{avg('lfHfRatio', 2)}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-gray-500">Resp</p>
-                    <p className="text-lg font-bold text-gray-900">{avg('respiratoryRate', 1)}</p>
-                    <p className="text-xs text-gray-400">brpm</p>
-                  </div>
+            <div className="clin-section">
+              <div className="clin-section-label">Today&apos;s averages</div>
+              <div className="clin-card">
+                <div className="clin-grid four">
+                  <div className="clin-tile"><div className="t-label">Heart rate</div><div className="t-value">{avg('heartRate', 0)}</div><div className="t-unit">bpm</div></div>
+                  <div className="clin-tile"><div className="t-label">RMSSD</div><div className="t-value">{avg('rmssd')}</div><div className="t-unit">ms</div></div>
+                  <div className="clin-tile"><div className="t-label">HRV</div><div className="t-value">{avg('hrv')}</div><div className="t-unit">ms</div></div>
+                  <div className="clin-tile"><div className="t-label">SpO₂</div><div className="t-value">{avg('estimatedSpO2', 0)}</div><div className="t-unit">%</div></div>
+                  <div className="clin-tile"><div className="t-label">Skin temp</div><div className="t-value">{avg('skinTemperature')}</div><div className="t-unit">°C</div></div>
+                  <div className="clin-tile"><div className="t-label">EDA</div><div className="t-value">{avg('meanEda', 2)}</div><div className="t-unit">µS</div></div>
+                  <div className="clin-tile"><div className="t-label">LF/HF</div><div className="t-value">{avg('lfHfRatio', 2)}</div><div className="t-unit">ratio</div></div>
+                  <div className="clin-tile"><div className="t-label">Respiration</div><div className="t-value">{avg('respiratoryRate')}</div><div className="t-unit">br/min</div></div>
                 </div>
-              </motion.div>
-            )}
+              </div>
+            </div>
 
-            {/* Latest Session Detail */}
-            {latestSession && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-gray-200 p-5">
-                <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4" style={{ color: TEAL_PRIMARY }} />
-                  Latest Session — {new Date(latestSession.capturedAt).toLocaleTimeString()}
-                </h2>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div className="bg-gray-50 rounded-lg p-2">
-                    <span className="text-gray-500">ASI: </span>
-                    <span className="font-semibold">{latestSession.asi?.toFixed(3) ?? '--'}</span>
+            <div className="clin-section">
+              <div className="clin-section-label">Wellness insights</div>
+              <div className="clin-card">
+                <div className="clin-card-head">
+                  <div>
+                    <h2>Downstream health outcomes</h2>
+                    <p>Model estimates from your most recent rPPG session.</p>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-2">
-                    <span className="text-gray-500">AC: </span>
-                    <span className="font-semibold">{latestSession.ac?.toFixed(2) ?? '--'}</span>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-2">
-                    <span className="text-gray-500">DC: </span>
-                    <span className="font-semibold">{latestSession.dc?.toFixed(2) ?? '--'}</span>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-2">
-                    <span className="text-gray-500">AC/DC: </span>
-                    <span className="font-semibold">{latestSession.acDcRatio?.toFixed(4) ?? '--'}</span>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-2">
-                    <span className="text-gray-500">Pulse Amp: </span>
-                    <span className="font-semibold">{latestSession.pulseAmplitude?.toFixed(3) ?? '--'}</span>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg p-2">
-                    <span className="text-gray-500">Quality: </span>
-                    <span className="font-semibold">{latestSession.signalQuality ?? '--'}%</span>
-                  </div>
+                  <div className="clin-card-ico"><Sparkles size={19} /></div>
                 </div>
-                {latestSession.hrTrend !== null && (
-                  <div className="mt-2 text-xs text-gray-500 flex gap-4">
-                    <span>HR Trend: {latestSession.hrTrend?.toFixed(4)}</span>
-                    <span>RMSSD Trend: {latestSession.rmssdTrend?.toFixed(4)}</span>
-                  </div>
-                )}
-              </motion.div>
-            )}
-
-            {/* Regression Scores */}
-            {predictions?.regression && Object.keys(predictions.regression).length > 0 && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-gray-200 p-5">
-                <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4" style={{ color: TEAL_PRIMARY }} />
-                  Downstream Health Outcomes
-                </h2>
-                <div className="space-y-3">
-                  {Object.entries(predictions.regression ?? {}).map(([target, result]) => {
-                    const ensemble = result?.ensemble;
-                    const interpretation = ensemble != null ? getRegressionInterpretation(target, ensemble) : '';
+                {predictions?.regression && Object.keys(predictions.regression).length > 0 ? (
+                  REGRESSION_TARGETS.map((target) => {
+                    const value = predictions.regression?.[target]?.ensemble;
+                    const color = isRiskTarget(target)
+                      ? (value ?? 0) >= 60 ? '#d94a55' : (value ?? 0) >= 40 ? '#e07a2d' : '#2f9e63'
+                      : (value ?? 0) >= 70 ? '#2f9e63' : (value ?? 0) >= 50 ? '#d39a22' : '#d94a55';
                     return (
-                      <div key={target} className="py-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-700">{target.replace(/_/g, ' ')}</span>
-                          <span className="text-sm font-semibold" style={{ color: isRiskTarget(target) ? getSeverityColor((ensemble ?? 0) / 100) : getPositiveColor(ensemble ?? 0) }}>
-                            {ensemble != null ? ensemble.toFixed(2) + '%' : '--'}
-                          </span>
+                      <div className="clin-row" key={target}>
+                        <div className="clin-row-main">
+                          <strong>{target.replace(/_/g, ' ')}</strong>
+                          <small>{value != null ? interpretation(target, value) : 'No value yet'}</small>
                         </div>
-                        {interpretation && (
-                          <p className="text-xs text-gray-400 mt-0.5 ml-1">{interpretation}</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Risk Domains */}
-            {predictions?.risk && Object.keys(predictions.risk).length > 0 && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-gray-200 p-5">
-                <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Shield className="w-4 h-4" style={{ color: TEAL_PRIMARY }} />
-                  Risk Assessment
-                </h2>
-                <div className="space-y-3">
-                  {Object.entries(predictions.risk).map(([domain, result]) => {
-                    const riskScore = result?.risk_score;
-                    return (
-                      <div key={domain} className="flex items-center justify-between">
-                        <span className="text-sm text-gray-700">{domain.replace(/_/g, ' ')}</span>
-                        <div className="flex items-center gap-2">
-                          <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{
-                                width: `${((riskScore ?? 0) * 100).toFixed(0)}%`,
-                                backgroundColor: getSeverityColor(riskScore ?? 0),
-                              }}
-                            />
-                          </div>
-                          <span className="text-xs font-semibold min-w-[4rem] text-right" style={{ color: getSeverityColor(riskScore ?? 0) }}>
-                            {getSeverityLabel(riskScore ?? 0)}
-                          </span>
+                        <div className="clin-keyline">
+                          <div className="clin-bar"><span style={{ width: `${Math.max(0, Math.min(100, value ?? 0))}%`, background: color }} /></div>
+                          <b style={{ color, fontSize: '0.82rem', minWidth: 44, textAlign: 'right' }}>
+                            {value != null ? `${value.toFixed(0)}%` : '--'}
+                          </b>
                         </div>
                       </div>
                     );
-                  })}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Mood Check */}
-            {predictions?.mood_check && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-gray-200 p-5">
-                <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Brain className="w-4 h-4" style={{ color: TEAL_PRIMARY }} />
-                  Mood Check
-                </h2>
-                {predictions.mood_check.best_prediction ? (
-                  <div className="text-center py-2">
-                    <p className="text-2xl font-bold text-gray-900">{predictions.mood_check.best_prediction.label}</p>
-                    <p className="text-sm text-gray-500">
-                      Confidence: {(predictions.mood_check.best_prediction.confidence * 100).toFixed(0)}%
-                    </p>
-                  </div>
+                  })
                 ) : (
-                  <p className="text-sm text-gray-400">Not enough data for mood prediction</p>
+                  <p className="clin-note">Complete a capture to unlock these insights.</p>
                 )}
-              </motion.div>
+              </div>
+
+              {predictions?.mood_check?.best_prediction && (
+                <div className="clin-card">
+                  <div className="clin-card-head">
+                    <div>
+                      <h2>Mood check</h2>
+                      <p>From the same passive sensing session.</p>
+                    </div>
+                    <div className="clin-card-ico"><Brain size={19} /></div>
+                  </div>
+                  <div className="clin-row" style={{ borderTop: 0 }}>
+                    <div className="clin-row-main">
+                      <strong style={{ fontSize: '1.1rem' }}>{predictions.mood_check.best_prediction.label}</strong>
+                      <small>{predictions.mood_check.best_algorithm || 'Model'} · {predictions.nSessions || sessions.length} sessions used</small>
+                    </div>
+                    <span className="clin-chip good">
+                      {(predictions.mood_check.best_prediction.confidence * 100).toFixed(0)}% confidence
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {latest && (
+              <div className="clin-section">
+                <div className="clin-section-label">Latest session</div>
+                <div className="clin-card">
+                  <div className="clin-card-head">
+                    <div>
+                      <h2>Advanced markers</h2>
+                      <p>{new Date(latest.capturedAt).toLocaleString()}</p>
+                    </div>
+                    <div className="clin-card-ico"><Activity size={19} /></div>
+                  </div>
+                  <div className="clin-grid four">
+                    <div className="clin-tile"><div className="t-label">ASI</div><div className="t-value">{latest.asi?.toFixed(3) ?? '--'}</div></div>
+                    <div className="clin-tile"><div className="t-label">AC/DC</div><div className="t-value">{latest.acDcRatio?.toFixed(3) ?? '--'}</div></div>
+                    <div className="clin-tile"><div className="t-label">Signal</div><div className="t-value">{latest.signalQuality ?? '--'}</div><div className="t-unit">%</div></div>
+                    <div className="clin-tile"><div className="t-label">Pulse amp</div><div className="t-value">{latest.pulseAmplitude?.toFixed(3) ?? '--'}</div></div>
+                  </div>
+                  <div className="clin-divider" />
+                  <div className="clin-list">
+                    <div className="clin-list-row"><span>Temperature</span><strong>{latest.skinTemperature ?? '--'}°C</strong></div>
+                    <div className="clin-list-row"><span>EDA</span><strong>{latest.meanEda ?? '--'} µS</strong></div>
+                    <div className="clin-list-row"><span>Respiratory rate</span><strong>{latest.respiratoryRate ?? '--'} br/min</strong></div>
+                    <div className="clin-list-row"><span>Session quality</span><strong style={{ textTransform: 'capitalize' }}>{latest.sessionQuality ?? 'unknown'}</strong></div>
+                  </div>
+                </div>
+              </div>
             )}
 
-            {/* Sessions Summary */}
-            {sessions.length > 0 && (
-              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-gray-200 p-5">
-                <h2 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Activity className="w-4 h-4" style={{ color: TEAL_PRIMARY }} />
-                  Session History ({sessions.length})
-                </h2>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {sessions.slice(0, 20).map((s) => (
-                    <div key={s.id} className="flex items-center justify-between text-xs py-1.5 border-b border-gray-50 last:border-0">
-                      <span className="text-gray-500">{new Date(s.capturedAt).toLocaleString()}</span>
-                      <div className="flex gap-3 text-gray-700">
-                        <span>HR {s.heartRate}</span>
-                        <span>RMSSD {s.rmssd.toFixed(1)}</span>
-                        <span className={s.sessionQuality === 'good' ? 'text-green-600' : 'text-amber-600'}>{s.sessionQuality}</span>
-                      </div>
+            <div className="clin-section">
+              <div className="clin-section-label">Session history</div>
+              <div className="clin-card">
+                <div className="clin-list">
+                  {sessions.slice(0, 12).map((session) => (
+                    <div className="clin-list-row" key={session.id}>
+                      <span>{new Date(session.capturedAt).toLocaleString()}</span>
+                      <span className="clin-keyline">
+                        <strong>{session.heartRate || '--'} bpm</strong>
+                        <span>·</span>
+                        <strong>{session.rmssd?.toFixed(0) ?? '--'} ms RMSSD</strong>
+                      </span>
                     </div>
                   ))}
                 </div>
-              </motion.div>
-            )}
-
-            {!todaySessions.length && !predictions && (
-              <div className="text-center py-12">
-                <Camera className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-600 mb-2">No Sessions Yet</h3>
-                <p className="text-sm text-gray-400 mb-6">Capture your first rPPG measurement to see insights here.</p>
-                <Button
-                  onClick={() => router.push('/rppg/capture')}
-                  className="h-12 rounded-xl text-white font-semibold"
-                  style={{ backgroundColor: TEAL_PRIMARY }}
-                >
-                  <Camera className="w-4 h-4 mr-2" />
-                  Start Capture
-                </Button>
               </div>
-            )}
+            </div>
           </>
         )}
-      </div>
 
-      <style>{`
-        .scrollbar-thin::-webkit-scrollbar { width: 4px; }
-        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
-        .scrollbar-thin::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
-      `}</style>
+        <p className="clin-note" style={{ textAlign: 'center', marginTop: 20 }}>
+          rPPG estimates are wellness indicators, not a medical diagnosis.
+        </p>
+      </div>
     </div>
   );
-};
-
-export default RppgPassiveSensing;
+}

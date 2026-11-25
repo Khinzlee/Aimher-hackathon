@@ -958,33 +958,38 @@ const RppgCamera: React.FC<RppgCameraProps> = ({
 
       <style>{`
         .rppg-camera { position: relative; width: 100%; max-width: 600px; margin: 0 auto; }
-        .camera-container { position: relative; background: #000; border-radius: 12px; overflow: hidden; }
-        .camera-view { width: 100%; height: 300px; position: relative; }
-        .rppg-video { width: 100%; height: 100%; object-fit: cover; background: #000; display: block; }
-        .camera-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #111; color: #666; }
-        .measurement-overlay { position: absolute; top: 0; left: 0; right: 0; padding: 12px; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); color: white; }
-        .timer { text-align: center; margin-bottom: 8px; }
-        .time-display { font-size: 22px; font-weight: bold; }
-        .progress-bar { width: 100%; height: 3px; background: rgba(255,255,255,0.2); border-radius: 2px; overflow: hidden; margin-top: 4px; }
-        .progress-fill { height: 100%; background: #4caf50; transition: width 1s linear; }
-        .signal-quality { font-size: 11px; margin-top: 4px; }
-        .signal-quality .good { color: #4caf50; font-weight: bold; }
-        .signal-quality .poor { color: #ff9800; font-weight: bold; }
-        .live-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: rgba(0,0,0,0.5); padding: 6px; border-radius: 4px; margin-top: 4px; }
-        .live-metrics > div { text-align: center; }
-        .metric-label { font-size: 9px; text-transform: uppercase; opacity: 0.7; }
-        .metric-value { font-size: 16px; font-weight: bold; }
-        .metric-unit { font-size: 8px; opacity: 0.6; }
-        .hrv-status { text-align: center; font-size: 11px; margin-top: 4px; padding: 2px 8px; background: rgba(0,0,0,0.3); border-radius: 4px; display: inline-block; width: auto; }
-        .readiness-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.6); color: white; gap: 6px; padding: 20px; }
-        .readiness-header { font-size: 14px; font-weight: bold; margin-bottom: 4px; opacity: 0.9; }
-        .readiness-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-        .readiness-icon { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; }
-        .readiness-icon.ready { background: #4caf50; color: white; }
-        .readiness-icon.not-ready { background: #f44336; color: white; }
-        .readiness-icon.checking { background: rgba(255,255,255,0.2); color: #aaa; }
+        .camera-container {
+          position: relative; overflow: hidden; border-radius: 20px;
+          background: linear-gradient(145deg, #122a27, #0c1a20);
+          border: 1px solid rgba(255,255,255,0.08);
+          box-shadow: 0 18px 36px -20px rgba(16, 60, 52, 0.75);
+        }
+        .camera-view { width: 100%; height: 292px; position: relative; }
+        .rppg-video { width: 100%; height: 100%; object-fit: cover; display: block; filter: saturate(0.92); }
+        .camera-placeholder { width: 100%; height: 100%; display: grid; place-items: center; background: #142421; color: rgba(255,255,255,0.5); font-size: 0.84rem; padding: 24px; text-align: center; }
+        .measurement-overlay { position: absolute; inset: 0 0 auto; padding: 14px; color: #fff; background: linear-gradient(to bottom, rgba(8,24,22,0.86), rgba(8,24,22,0)); }
+        .timer { text-align: center; margin-bottom: 10px; }
+        .time-display { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+        .progress-bar { width: 100%; height: 5px; background: rgba(255,255,255,0.18); border-radius: 999px; overflow: hidden; margin-top: 6px; }
+        .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #55a08a, #8fd3bd); transition: width 1s linear; }
+        .signal-quality { font-size: 0.68rem; margin-top: 6px; opacity: 0.85; }
+        .signal-quality .good { color: #8fd3bd; font-weight: 700; }
+        .signal-quality .poor { color: #f2b866; font-weight: 700; }
+        .live-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 8px; border-radius: 14px; background: rgba(255,255,255,0.08); backdrop-filter: blur(10px); }
+        .live-metrics > div { text-align: center; padding: 6px 2px; }
+        .metric-label { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.65; }
+        .metric-value { font-size: 1rem; font-weight: 700; margin-top: 2px; }
+        .metric-unit { font-size: 0.56rem; opacity: 0.6; }
+        .hrv-status { display: inline-block; margin-top: 8px; padding: 4px 12px; border-radius: 999px; background: rgba(255,255,255,0.12); color: #d9f2e9; font-size: 0.66rem; }
+        .readiness-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 9px; padding: 22px; color: #fff; background: rgba(9, 30, 27, 0.78); backdrop-filter: blur(4px); }
+        .readiness-header { font-size: 0.86rem; font-weight: 700; letter-spacing: 0.02em; margin-bottom: 4px; }
+        .readiness-item { display: flex; align-items: center; gap: 9px; font-size: 0.78rem; color: rgba(255,255,255,0.86); }
+        .readiness-icon { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 0.66rem; font-weight: 700; flex-shrink: 0; }
+        .readiness-icon.ready { background: #55a08a; color: #fff; }
+        .readiness-icon.not-ready { background: #d94a55; color: #fff; }
+        .readiness-icon.checking { background: rgba(255,255,255,0.18); color: #d7e2df; }
         .readiness-label { line-height: 1.3; }
-        .readiness-quality { margin-top: 6px; font-size: 12px; opacity: 0.8; }
+        .readiness-quality { margin-top: 4px; font-size: 0.7rem; opacity: 0.8; }
       `}</style>
     </div>
   );
