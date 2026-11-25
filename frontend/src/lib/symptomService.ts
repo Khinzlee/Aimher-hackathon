@@ -30,6 +30,21 @@ export interface SymptomLogEntry {
   metrics?: SymptomApiPayload;
 }
 
+export interface DiseasePrediction {
+  probability: number;
+  predicted: number;
+  severity: 'Low' | 'Moderate' | 'High';
+  riskScore: number;
+  riskSeverity: 'Minimal' | 'Mild' | 'Moderate' | 'Severe';
+}
+
+export interface SymptomPrediction {
+  diseases: Record<string, DiseasePrediction>;
+  symptomBurdenScore: number;
+  source: 'api' | 'local';
+  createdAt: string;
+}
+
 export interface ConditionSummary {
   conditionId: string;
   /** latest burden score 0-10 (avg of its symptoms on the most recent entry) */
@@ -46,6 +61,7 @@ export interface ConditionSummary {
 
 const STORAGE_KEY = 'aimher-symptom-logs-v1';
 const SEED_KEY = 'aimher-symptom-logs-seeded-v1';
+const PREDICTION_KEY = 'aimher-symptom-prediction-v1';
 
 const delay = (ms = 120) => new Promise((r) => setTimeout(r, ms));
 
@@ -256,6 +272,70 @@ export async function saveSymptomLog(metrics: SymptomApiPayload): Promise<Sympto
       return entry;
     }
   );
+}
+
+const DISEASE_KEYS = ['Infertility', 'Dysmenorrhea', 'PMDD', 'T2D', 'CVD', 'Endometrial'] as const;
+
+function localPrediction(metrics: SymptomApiPayload): SymptomPrediction {
+  const scores = valuesFromMetrics(metrics);
+  const burden = (Object.values(scores).reduce((a, b) => a + b, 0) / 7) * 10 / 10;
+  const diseases: Record<string, DiseasePrediction> = {};
+  DISEASE_KEYS.forEach((key, i) => {
+    const probability = Math.max(0.02, Math.min(0.95, (burden / 10) * 0.7 + (i % 3) * 0.04));
+    diseases[key] = {
+      probability: Math.round(probability * 100) / 100,
+      predicted: probability >= 0.6 ? 1 : 0,
+      severity: probability >= 0.6 ? 'High' : probability >= 0.35 ? 'Moderate' : 'Low',
+      riskScore: Math.round(probability * 90) / 100,
+      riskSeverity: probability >= 0.7 ? 'Severe' : probability >= 0.45 ? 'Moderate' : 'Mild',
+    };
+  });
+  return {
+    diseases,
+    symptomBurdenScore: Math.round(burden * 100) / 100,
+    source: 'local',
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function cachePrediction(prediction: SymptomPrediction) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(PREDICTION_KEY, JSON.stringify(prediction));
+}
+
+/** Cache only — used by the dashboard when it mounts. */
+export function getCachedPrediction(): SymptomPrediction | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(PREDICTION_KEY);
+    return raw ? (JSON.parse(raw) as SymptomPrediction) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** POST /predictions/from-symptoms with the same nine clinical fields. */
+export async function predictFromSymptoms(metrics: SymptomApiPayload): Promise<SymptomPrediction> {
+  const prediction = await withApiFallback(
+    async () => {
+      const raw = await apiFetch<any>('/predictions/from-symptoms', {
+        method: 'POST',
+        body: JSON.stringify(metrics),
+      });
+      return {
+        diseases: (raw?.diseases ?? {}) as Record<string, DiseasePrediction>,
+        symptomBurdenScore: Number(raw?.symptomBurdenScore ?? 0),
+        source: 'api' as const,
+        createdAt: new Date().toISOString(),
+      };
+    },
+    async () => {
+      await delay();
+      return localPrediction(metrics);
+    }
+  );
+  cachePrediction(prediction);
+  return prediction;
 }
 
 function burdenForEntry(entry: SymptomLogEntry, symptomIds: string[]): number | null {

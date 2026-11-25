@@ -10,6 +10,7 @@ export interface ToastMessage {
 }
 
 let toasts: ToastMessage[] = [];
+const EMPTY_TOASTS: ToastMessage[] = [];
 let nextId = 1;
 const listeners = new Set<() => void>();
 
@@ -37,6 +38,6 @@ export function toast(props: Omit<ToastMessage, "id">) {
 }
 
 export function useToast() {
-  const items = useSyncExternalStore(subscribe, getSnapshot, () => [] as ToastMessage[]);
+  const items = useSyncExternalStore(subscribe, getSnapshot, () => EMPTY_TOASTS);
   return { toasts: items, toast };
 }

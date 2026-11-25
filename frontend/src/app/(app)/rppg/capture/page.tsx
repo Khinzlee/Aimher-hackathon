@@ -37,7 +37,6 @@ export default function RppgV8CaptureScreen() {
 
   useEffect(() => {
     if (!showPreview) return;
-    setShowBypass(false);
     const timer = setTimeout(() => setShowBypass(true), 5000);
     return () => clearTimeout(timer);
   }, [showPreview]);
@@ -98,6 +97,7 @@ export default function RppgV8CaptureScreen() {
     setSessionData(null);
     setShowPreview(true);
     setReadiness(null);
+    setShowBypass(false);
     setError(null);
   };
 
