@@ -51,7 +51,7 @@ export async function withApiFallback<T>(
   remote: () => Promise<T>,
   local: () => Promise<T>
 ): Promise<T> {
-  if (isApiConfigured()) {
+  if (isApiConfigured) {
     try {
       return await remote();
     } catch {
