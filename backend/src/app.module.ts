@@ -6,6 +6,7 @@ import { UsersModule } from './users/users.module';
 import { PredictionsModule } from './predictions/predictions.module';
 import { SymptomsModule } from './symptoms/symptoms.module';
 import { RppgV8Module } from './rppg-v8/rppg-v8.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -17,6 +18,7 @@ import { HealthController } from './health/health.controller';
     PredictionsModule,
     SymptomsModule,
     RppgV8Module,
+    OnboardingModule,
   ],
   controllers: [HealthController],
 })

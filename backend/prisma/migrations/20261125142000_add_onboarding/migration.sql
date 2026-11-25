@@ -1,9 +1,9 @@
 -- AlterTable
-ALTER TABLE "User" ADD COLUMN     "onboardingCompleted" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN     "onboardingStep" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "onboardingCompleted" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS "onboardingStep" INTEGER NOT NULL DEFAULT 0;
 
 -- CreateTable
-CREATE TABLE "OnboardingProfile" (
+CREATE TABLE IF NOT EXISTS "OnboardingProfile" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "fullName" TEXT,
@@ -43,7 +43,14 @@ CREATE TABLE "OnboardingProfile" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "OnboardingProfile_userId_key" ON "OnboardingProfile"("userId");
+CREATE UNIQUE INDEX IF NOT EXISTS "OnboardingProfile_userId_key" ON "OnboardingProfile"("userId");
 
 -- AddForeignKey
-ALTER TABLE "OnboardingProfile" ADD CONSTRAINT "OnboardingProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'OnboardingProfile_userId_fkey'
+    ) THEN
+        ALTER TABLE "OnboardingProfile" ADD CONSTRAINT "OnboardingProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
