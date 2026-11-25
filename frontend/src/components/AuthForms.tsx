@@ -81,7 +81,7 @@ export function SignIn({ onSwitch }: { onSwitch: () => void }) {
       // });
       // if (!res.ok) throw new Error("Invalid credentials");
       await new Promise((r) => setTimeout(r, 1200));
-      router.push("/dashboard");
+      router.push("/onboarding");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {

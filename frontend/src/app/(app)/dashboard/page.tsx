@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ChevronRight, ClipboardList } from 'lucide-react';
+import { AlertTriangle, Camera, ChevronRight, ClipboardList } from 'lucide-react';
 import { CONDITIONS, getSeverity } from '@/lib/symptoms';
 import {
   getConditionSummaries,
@@ -12,6 +12,7 @@ import SeverityBadge from '@/components/SeverityBadge';
 import Sparkline from '@/components/Sparkline';
 import { SymptomIcon } from '@/components/SymptomIcon';
 import { useNow } from '@/hooks/useNow';
+import { useProfile } from '@/hooks/useProfile';
 
 function greeting(d: Date) {
   const h = d.getHours();
@@ -23,6 +24,8 @@ function greeting(d: Date) {
 export default function DashboardPage() {
   const [summaries, setSummaries] = useState<ConditionSummary[] | null>(null);
   const now = useNow();
+  const profile = useProfile();
+  const firstName = profile?.full_name?.split(' ')[0];
 
   useEffect(() => {
     let alive = true;
@@ -46,10 +49,48 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <p className="text-sm text-gray-500">{today}</p>
-        <h1 className="text-2xl font-bold">{now ? greeting(now) : 'Hello'}</h1>
+        <h1 className="text-2xl font-bold">
+          {now ? greeting(now) : 'Hello'}
+          {firstName ? `, ${firstName}` : ''}
+        </h1>
         <p className="text-sm text-gray-500 mt-1">
           Symptom burden across 6 tracked conditions
         </p>
+      </div>
+
+      {/* Quick actions — Aimher-style action rows */}
+      <div className="space-y-3">
+        {[
+          {
+            href: '/log',
+            icon: ClipboardList,
+            title: 'Log Symptoms',
+            subtitle: 'Rate intensity for your tracked conditions',
+            gradient: 'bg-teal-500',
+          },
+          {
+            href: '/rppg',
+            icon: Camera,
+            title: 'rPPG Passive Sensing',
+            subtitle: 'Capture HR, HRV, SpO₂ & more with your camera',
+            gradient: 'bg-emerald-500',
+          },
+        ].map((a) => (
+          <Link
+            key={a.href}
+            href={a.href}
+            className="w-full rounded-2xl border border-gray-200 bg-white p-4 flex items-center gap-4 hover:shadow-md transition-shadow group"
+          >
+            <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${a.gradient}`}>
+              <a.icon className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-gray-900">{a.title}</h3>
+              <p className="text-xs text-gray-500 truncate">{a.subtitle}</p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-gray-500 transition-colors shrink-0" />
+          </Link>
+        ))}
       </div>
 
       {flagged && flagged.length > 0 && (

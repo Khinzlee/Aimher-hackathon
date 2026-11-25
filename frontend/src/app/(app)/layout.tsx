@@ -2,10 +2,11 @@ import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import BottomNav from "@/components/BottomNav";
+import { Providers } from "@/components/Providers";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <>
+    <Providers>
       <header className="sticky top-0 z-20 bg-white/85 backdrop-blur border-b border-[var(--border)]">
         <div className="max-w-lg mx-auto px-4 h-14 flex items-center">
           <Link href="/dashboard" className="flex items-center gap-2">
@@ -18,6 +19,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Suspense fallback={null}>
         <BottomNav />
       </Suspense>
-    </>
+    </Providers>
   );
 }
