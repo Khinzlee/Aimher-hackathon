@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, ChevronLeft } from 'lucide-react';
 import VASSlider from '@/components/VASSlider';
+import { apiFetch } from '@/lib/apiClient';
+import { cyclePhaseForDay } from '@/lib/symptoms';
 
 const QUESTIONS = {
   fatigue: { label: 'Physical Fatigue', desc: 'How tired or physically drained do you feel?', low: 'Energized', high: 'Exhausted' },
@@ -26,14 +28,37 @@ export default function MorningCheckinPage() {
   const psqValues = PSQ.map((q) => psq[q.id] ?? 0);
   const hyperalgesia = psqValues.reduce((a, b) => a + b, 0) / psqValues.length;
 
-  function complete() {
+  async function complete() {
+    const payload = {
+      date: new Date().toISOString().slice(0, 10),
+      fatigue, pelvic, psq,
+      hyperalgesia_index: hyperalgesia,
+    };
     try {
-      localStorage.setItem('morning_checkin', JSON.stringify({
-        date: new Date().toISOString().slice(0, 10),
-        fatigue, pelvic, psq,
-        hyperalgesia_index: hyperalgesia,
-      }));
+      localStorage.setItem('morning_checkin', JSON.stringify(payload));
     } catch {}
+
+    const day = Number(localStorage.getItem('aimher-cycle-day') ?? 14);
+    try {
+      await apiFetch('/symptoms', {
+        method: 'POST',
+        body: JSON.stringify({
+          day_of_cycle: day,
+          cycle_phase: cyclePhaseForDay(day),
+          breast_soreness_vas: 0,
+          painful_touch_vas: Number(hyperalgesia.toFixed(1)),
+          pelvic_pressure_vas: pelvic,
+          bloating_delta_cm: 0,
+          fatigue_mfi5_vas: fatigue,
+          acne_severity_likert: 0,
+          hirsutism_mfg_score: 0,
+          check_type: 'morning',
+          extra_data: payload,
+        }),
+      });
+    } catch {
+      // Backend unreachable — localStorage copy already saved
+    }
     setDone(true);
     setTimeout(() => router.push('/dashboard'), 1200);
   }
