@@ -4,28 +4,22 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, ClipboardList } from 'lucide-react';
-import { CONDITION_MAP, SYMPTOM_MAP, getSeverity } from '@/lib/symptoms';
-import { getConditionDetail, type ConditionDetail } from '@/lib/symptomService';
+import { diseaseByRouteId, burdenSeverity, probabilitySeverity, riskScoreSeverity } from '@/lib/symptoms';
+import { getSymptomHistory, getCachedPrediction, type SymptomLogEntry } from '@/lib/symptomService';
 import SeverityBadge from '@/components/SeverityBadge';
 import TrendChart from '@/components/TrendChart';
 import { SymptomIcon } from '@/components/SymptomIcon';
 
-function ConditionDetail() {
+function DiseaseDetail() {
   const params = useParams<{ id: string }>();
-  const conditionId = params.id;
-  const [detail, setDetail] = useState<ConditionDetail | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const disease = diseaseByRouteId(params.id);
+  const [entries, setEntries] = useState<SymptomLogEntry[] | null>(null);
 
   useEffect(() => {
-    getConditionDetail(conditionId, 30).then((d) => {
-      if (d) setDetail(d);
-      else setNotFound(true);
-    });
-  }, [conditionId]);
+    getSymptomHistory(60).then((h) => setEntries(h.data));
+  }, []);
 
-  const cond = CONDITION_MAP[conditionId];
-
-  if (notFound || !cond) {
+  if (!disease) {
     return (
       <div className="text-center py-16">
         <p className="text-gray-500">Condition not found.</p>
@@ -36,20 +30,44 @@ function ConditionDetail() {
     );
   }
 
-  if (!detail) {
+  if (!entries) {
     return <div className="bg-white rounded-2xl border border-gray-200 p-6 animate-pulse h-96" />;
   }
 
-  const { summary, symptoms, entries } = detail;
-  const burden = summary.latestBurden;
-  const sev = burden !== null ? getSeverity(burden) : null;
+  const prediction = getCachedPrediction();
+  const pred = prediction?.diseases?.[disease.key] ?? null;
+  const probSev = pred ? probabilitySeverity(pred.probability) : null;
+  const riskSev = pred ? riskScoreSeverity(pred.riskScore) : null;
+  const elevated = pred ? pred.severity === 'High' || pred.predicted === 1 : false;
+
+  // burden + per-entry disease riskScore series (when predictions were cached per entry)
+  const burdenSeries = entries
+    .slice()
+    .reverse()
+    .map((e) => ({ date: e.loggedAt.slice(0, 10), value: e.symptomBurdenScore }));
+  const riskSeries = entries
+    .slice()
+    .reverse()
+    .map((e) => ({
+      date: e.loggedAt.slice(0, 10),
+      value: e.prediction?.[disease.key]?.riskScore != null
+        ? e.prediction[disease.key].riskScore * 10
+        : null,
+    }));
+
+  const FIELD_LABELS: [keyof SymptomLogEntry['data'], string][] = [
+    ['breast_soreness_vas', 'Breast Soreness'],
+    ['painful_touch_vas', 'Painful Touch'],
+    ['pelvic_pressure_vas', 'Pelvic Pressure'],
+    ['bloating_delta_cm', 'Bloating (cm)'],
+    ['fatigue_mfi5_vas', 'Fatigue (MFI-5)'],
+    ['acne_severity_likert', 'Acne (0–4)'],
+    ['hirsutism_mfg_score', 'Hirsutism mFG'],
+  ];
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800"
-      >
+      <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800">
         <ArrowLeft className="h-4 w-4" /> Dashboard
       </Link>
 
@@ -57,89 +75,71 @@ function ConditionDetail() {
         <div className="flex items-start gap-3">
           <div
             className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
-            style={{ backgroundColor: `${cond.color}1A` }}
+            style={{ backgroundColor: `${disease.color}1A` }}
           >
-            <SymptomIcon name={cond.icon} className="h-6 w-6" style={{ color: cond.color }} />
+            <SymptomIcon name={disease.icon} className="h-6 w-6" style={{ color: disease.color }} />
           </div>
           <div className="flex-1">
-            <h1 className="text-xl font-bold">{cond.fullName}</h1>
-            <p className="text-xs text-gray-500">{cond.description}</p>
+            <h1 className="text-xl font-bold">{disease.fullName}</h1>
+            <p className="text-xs text-gray-500">{disease.description}</p>
           </div>
         </div>
 
-        {summary.redFlag && (
+        {elevated && (
           <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 flex gap-2">
             <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-red-800">{cond.redFlagMessage}</p>
+            <p className="text-xs text-red-800">
+              Elevated risk flagged by the model — consider discussing with a clinician.
+            </p>
           </div>
         )}
 
-        <div className="mt-4 flex items-end justify-between">
-          <div>
-            <p className="text-xs text-gray-500">Latest symptom burden</p>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-4xl font-bold tabular-nums" style={{ color: sev?.color ?? '#9CA3AF' }}>
-                {burden !== null ? burden.toFixed(1) : '—'}
-              </span>
-              <span className="text-sm text-gray-400">/10</span>
-            </div>
-            {burden !== null && <div className="mt-2"><SeverityBadge value={burden} /></div>}
-            {summary.latestDate && (
-              <p className="text-[11px] text-gray-400 mt-1">
-                as of {new Date(summary.latestDate + 'T00:00:00').toLocaleDateString()}
+        {pred ? (
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-xs text-gray-500">Probability</p>
+              <p className="text-2xl font-bold tabular-nums" style={{ color: probSev!.color }}>
+                {(pred.probability * 100).toFixed(0)}%
               </p>
-            )}
+              <div className="mt-1"><SeverityBadge severity={probSev!} /></div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3">
+              <p className="text-xs text-gray-500">Risk Score</p>
+              <p className="text-2xl font-bold tabular-nums" style={{ color: riskSev!.color }}>
+                {(pred.riskScore * 100).toFixed(0)}%
+              </p>
+              <div className="mt-1"><SeverityBadge severity={riskSev!} /></div>
+            </div>
           </div>
-          <Link
-            href="/log"
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white"
-            style={{ backgroundColor: cond.color }}
-          >
-            <ClipboardList className="h-4 w-4" /> Log symptoms
-          </Link>
-        </div>
+        ) : (
+          <p className="mt-4 text-sm text-gray-400">
+            No prediction cached — log symptoms to generate one.
+          </p>
+        )}
 
-        <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">{cond.disclaimer}</p>
+        <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">{disease.disclaimer}</p>
+
+        <Link
+          href="/log"
+          className="mt-4 flex items-center justify-center gap-1.5 w-full rounded-xl py-2.5 text-sm font-semibold text-white"
+          style={{ backgroundColor: disease.color }}
+        >
+          <ClipboardList className="h-4 w-4" /> Log symptoms
+        </Link>
       </div>
 
-      {/* trend */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5">
-        <h2 className="font-bold text-sm mb-3">30-day burden trend</h2>
-        <TrendChart series={summary.series} color={cond.color} />
+        <h2 className="font-bold text-sm mb-3">Symptom burden trend</h2>
+        <TrendChart series={burdenSeries} color={disease.color} />
       </div>
 
-      {/* per-symptom breakdown */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-5">
-        <h2 className="font-bold text-sm mb-3">Symptom breakdown</h2>
-        <div className="space-y-3">
-          {symptoms.map((s) => {
-            const meta = SYMPTOM_MAP[s.symptomId];
-            const avgSev = s.average !== null ? getSeverity(s.average) : null;
-            return (
-              <div key={s.symptomId} className="flex items-center gap-3">
-                <SymptomIcon name={meta?.icon ?? 'Activity'} className="h-4 w-4 text-gray-400 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">{meta?.label}</p>
-                  <div className="h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${((s.average ?? 0) / 10) * 100}%`,
-                        backgroundColor: avgSev?.color ?? '#E5E7EB',
-                      }}
-                    />
-                  </div>
-                </div>
-                <span className="text-sm font-bold tabular-nums w-10 text-right" style={{ color: avgSev?.color ?? '#9CA3AF' }}>
-                  {s.average !== null ? s.average.toFixed(1) : '—'}
-                </span>
-              </div>
-            );
-          })}
+      {riskSeries.some((p) => p.value !== null) && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <h2 className="font-bold text-sm mb-3">Risk score trend (0–10 scaled)</h2>
+          <TrendChart series={riskSeries} color={disease.color} />
         </div>
-      </div>
+      )}
 
-      {/* history */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5">
         <h2 className="font-bold text-sm mb-3">Log history</h2>
         {entries.length === 0 ? (
@@ -150,42 +150,36 @@ function ConditionDetail() {
               <thead>
                 <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
                   <th className="py-2 pr-3 font-medium">Date</th>
-                  {cond.symptomIds.map((id) => (
-                    <th key={id} className="py-2 px-2 font-medium whitespace-nowrap">
-                      {SYMPTOM_MAP[id]?.label.split(' ')[0]}
-                    </th>
+                  <th className="py-2 px-2 font-medium">Phase</th>
+                  <th className="py-2 px-2 font-medium">Day</th>
+                  {FIELD_LABELS.map(([k, label]) => (
+                    <th key={k} className="py-2 px-2 font-medium whitespace-nowrap">{label.split(' ')[0]}</th>
                   ))}
                   <th className="py-2 pl-2 font-medium">Burden</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.slice(0, 14).map((e) => {
-                  const b = cond.symptomIds
-                    .map((id) => e.values[id])
-                    .filter((v): v is number => typeof v === 'number');
-                  const avg = b.length ? b.reduce((a, x) => a + x, 0) / b.length : null;
-                  const sevEntry = avg !== null ? getSeverity(avg) : null;
+                  const sev = burdenSeverity(e.symptomBurdenScore);
                   return (
                     <tr key={e.id} className="border-b border-gray-50 last:border-0">
                       <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">
-                        {new Date(e.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        {new Date(e.loggedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                       </td>
-                      {cond.symptomIds.map((id) => (
-                        <td key={id} className="py-2 px-2 text-center tabular-nums text-gray-700">
-                          {typeof e.values[id] === 'number' ? e.values[id] : '·'}
+                      <td className="py-2 px-2 text-gray-600">{e.data.cycle_phase}</td>
+                      <td className="py-2 px-2 text-gray-600 tabular-nums">{e.data.day_of_cycle}</td>
+                      {FIELD_LABELS.map(([k]) => (
+                        <td key={k} className="py-2 px-2 text-center tabular-nums text-gray-700">
+                          {e.data[k]}
                         </td>
                       ))}
                       <td className="py-2 pl-2">
-                        {avg !== null ? (
-                          <span
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-                            style={{ backgroundColor: sevEntry!.bg, color: sevEntry!.color }}
-                          >
-                            {avg.toFixed(1)}
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
+                          style={{ backgroundColor: sev.bg, color: sev.color }}
+                        >
+                          {e.symptomBurdenScore.toFixed(1)}
+                        </span>
                       </td>
                     </tr>
                   );
@@ -202,7 +196,7 @@ function ConditionDetail() {
 export default function ConditionDetailPage() {
   return (
     <Suspense fallback={<div className="bg-white rounded-2xl border border-gray-200 p-6 animate-pulse h-96" />}>
-      <ConditionDetail />
+      <DiseaseDetail />
     </Suspense>
   );
 }

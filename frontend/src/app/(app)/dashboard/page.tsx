@@ -2,17 +2,26 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { AlertTriangle, Camera, ChevronRight, ClipboardList } from 'lucide-react';
 import {
-  Activity, Camera, ChevronRight, ClipboardList, Droplets,
-  HeartPulse, Moon, Stethoscope, Target, Thermometer,
-} from 'lucide-react';
-import { getConditionSummaries } from '@/lib/symptomService';
+  DISEASES,
+  burdenSeverity,
+  diseaseRouteId,
+  probabilitySeverity,
+  riskScoreSeverity,
+} from '@/lib/symptoms';
+import {
+  getSymptomHistory,
+  getCachedPrediction,
+  type DiseasePredictionMap,
+  type PredictResponse,
+  type SymptomLogEntry,
+} from '@/lib/symptomService';
+import SeverityBadge from '@/components/SeverityBadge';
+import Sparkline from '@/components/Sparkline';
+import { SymptomIcon } from '@/components/SymptomIcon';
 import { useNow } from '@/hooks/useNow';
 import { useProfile } from '@/hooks/useProfile';
-
-/* ---------- helpers ---------- */
-// Deterministic fallback during prerender; the real date arrives after mount via useNow().
-const PRERENDER_DATE = new Date(0);
 
 function greeting(d: Date) {
   const h = d.getHours();
@@ -21,171 +30,189 @@ function greeting(d: Date) {
   return 'Good evening';
 }
 
-function severity(score: number) {
-  if (score < 1) return { label: 'None', fg: '#1f7a45', bg: '#e3f4ea' };
-  if (score < 4) return { label: 'Mild', fg: '#b86e12', bg: '#fdf0dc' };
-  if (score < 6.5) return { label: 'Moderate', fg: '#c2570c', bg: '#fde8d6' };
-  if (score < 8) return { label: 'Severe', fg: '#c62f3a', bg: '#fde3e5' };
-  return { label: 'Extreme', fg: '#8c1d1d', bg: '#f8d7d7' };
-}
-
-const ICONS: Record<string, { Icon: any; color: string; bg: string }> = {
-  infertility: { Icon: Target, color: '#7c5ce6', bg: '#efeafd' },
-  dysmenorrhea: { Icon: Thermometer, color: '#e8742a', bg: '#fdeee2' },
-  pmdd: { Icon: Moon, color: '#5b6ee6', bg: '#e9ecfd' },
-  t2d: { Icon: Droplets, color: '#2f8fd8', bg: '#e1f0fb' },
-  cvd: { Icon: HeartPulse, color: '#e2475a', bg: '#fde6e9' },
-  endometrial: { Icon: Stethoscope, color: '#d13a3a', bg: '#fbe4e4' },
-};
-
-function iconFor(title: string) {
-  const t = title.toLowerCase();
-  const key = Object.keys(ICONS).find((k) => t.includes(k));
-  return key ? ICONS[key] : { Icon: Activity, color: '#3a8a7b', bg: '#e3f1ee' };
-}
-
-/* Reads a condition summary using several likely field names. */
-function adapt(s: any) {
-  const series: number[] = (s.history ?? s.series ?? s.trend ?? s.scores ?? [])
-    .map((v: any) => (typeof v === 'number' ? v : Number(v?.score ?? v?.value ?? 0)));
-  const score = Number(s.score ?? s.latest ?? s.current ?? series[series.length - 1] ?? 0);
-  const delta =
-    s.delta ?? s.change ??
-    (series.length > 1 ? series[series.length - 1] - series[series.length - 2] : 0);
-  return {
-    id: String(s.id ?? s.conditionId ?? s.key ?? s.slug ?? s.name),
-    title: String(s.shortName ?? s.name ?? s.label ?? s.title ?? 'Condition'),
-    subtitle: String(s.fullName ?? s.subtitle ?? s.description ?? ''),
-    score,
-    delta: Number(delta) || 0,
-    series,
-  };
-}
-
-function Spark({ data, color }: { data: number[]; color: string }) {
-  if (data.length < 2) return <div style={{ width: 96 }} />;
-  const w = 96, h = 34;
-  const min = Math.min(...data), max = Math.max(...data), r = max - min || 1;
-  const pts = data
-    .map((v, i) => `${(i / (data.length - 1)) * w},${h - 3 - ((v - min) / r) * (h - 6)}`)
-    .join(' ');
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-/* ---------- page ---------- */
 export default function DashboardPage() {
-  const [summaries, setSummaries] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const now = useNow() ?? PRERENDER_DATE;
-  const profileData: any = useProfile();
-  const profile = profileData?.profile ?? profileData ?? {};
+  const [entries, setEntries] = useState<SymptomLogEntry[] | null>(null);
+  const [prediction, setPrediction] = useState<PredictResponse | null>(null);
+  const now = useNow();
+  const profile = useProfile();
+  const firstName = profile?.full_name?.split(' ')[0];
 
   useEffect(() => {
     let alive = true;
-    Promise.resolve(getConditionSummaries())
-      .then((r: any) => alive && setSummaries(Array.isArray(r) ? r : []))
-      .catch(() => {})
-      .finally(() => alive && setLoading(false));
-    return () => { alive = false; };
+    getSymptomHistory(30).then((h) => {
+      if (!alive) return;
+      setEntries(h.data);
+      setPrediction(getCachedPrediction());
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const fullName: string = profile.fullName ?? profile.name ?? profile.full_name ?? '';
-  const first = fullName.split(' ')[0];
-  const patientId = profile.patientId ?? profile.patient_id ?? '';
-  const h = Number(profile.height ?? profile.heightCm ?? 0);
-  const w = Number(profile.weight ?? profile.weightKg ?? 0);
-  const bmi = h && w ? w / Math.pow(h / 100, 2) : 0;
+  const today = now
+    ? now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+    : '';
 
-  const dateText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  const items = summaries.map(adapt);
+  const latest = entries?.[0] ?? null;
+  const burden = latest?.symptomBurdenScore ?? null;
+  const burdenSev = burden !== null ? burdenSeverity(burden) : null;
+  const diseases: DiseasePredictionMap = prediction?.diseases ?? {};
+  const burdenSeries = (entries ?? []).slice().reverse().map((e) => e.symptomBurdenScore);
+
+  const flagged = DISEASES.filter((d) => {
+    const p = diseases[d.key];
+    return p && (p.severity === 'High' || p.predicted === 1);
+  });
 
   return (
-    <div className="app-wrap">
-      <header className="d-top">
-        <div className="d-brand">
-          <img src="/logo.png" alt="" />
-          AIMHER
-        </div>
-        <Link href="/profile" className="d-avatar" aria-label="Profile">
-          {(first || 'U').charAt(0).toUpperCase()}
-        </Link>
-      </header>
-
-      <section className="d-hero">
-        <div className="date">{dateText}</div>
-        <h1>{greeting(now)}{first ? `, ${first}` : ''}</h1>
-        <p>Symptom burden across {items.length || 6} tracked conditions</p>
-        <Link href="/log" className="d-btn">
-          <ClipboardList size={18} /> Log today&apos;s symptoms
-        </Link>
-      </section>
-
-      <div className="d-grid2">
-        <Link href="/log" className="d-card d-tile">
-          <div className="ico" style={{ background: '#e3f1ee', color: '#3a8a7b' }}><ClipboardList size={22} /></div>
-          <b>Log Symptoms</b>
-          <span>Rate intensity for your tracked conditions</span>
-        </Link>
-        <Link href="/rppg" className="d-card d-tile">
-          <div className="ico" style={{ background: '#e1f4ea', color: '#2f9e63' }}><Camera size={22} /></div>
-          <b>rPPG Sensing</b>
-          <span>Capture HR, HRV &amp; SpO₂ with your camera</span>
-        </Link>
+    <div className="space-y-6">
+      <div>
+        <p className="text-sm text-gray-500">{today}</p>
+        <h1 className="text-2xl font-bold">
+          {now ? greeting(now) : 'Hello'}
+          {firstName ? `, ${firstName}` : ''}
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Symptom burden &amp; disease risk from your latest log
+        </p>
       </div>
 
-      <div className="d-label">Your profile</div>
-      <Link href="/profile" className="d-card d-profile">
-        <div className="big">{(first || 'U').charAt(0).toUpperCase()}</div>
-        <div className="info">
-          <div className="name">{fullName || 'Complete your profile'}</div>
-          {patientId && <div className="pid">{patientId}</div>}
-          {bmi > 0 && (
-            <span className="d-chip" style={{ background: '#eef2f4', color: '#4a5666', marginTop: 6 }}>
-              BMI {bmi.toFixed(1)}
-            </span>
-          )}
+      {/* Quick actions */}
+      <div className="space-y-3">
+        {[
+          {
+            href: '/log',
+            icon: ClipboardList,
+            title: 'Log Symptoms',
+            subtitle: 'Rate intensity — runs risk prediction',
+            gradient: 'bg-teal-500',
+          },
+          {
+            href: '/rppg',
+            icon: Camera,
+            title: 'rPPG Passive Sensing',
+            subtitle: 'Capture HR, HRV, SpO₂ & more with your camera',
+            gradient: 'bg-emerald-500',
+          },
+        ].map((a) => (
+          <Link
+            key={a.href}
+            href={a.href}
+            className="w-full rounded-2xl border border-gray-200 bg-white p-4 flex items-center gap-4 hover:shadow-md transition-shadow group"
+          >
+            <div className={`h-11 w-11 rounded-xl flex items-center justify-center shrink-0 ${a.gradient}`}>
+              <a.icon className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-gray-900">{a.title}</h3>
+              <p className="text-xs text-gray-500 truncate">{a.subtitle}</p>
+            </div>
+            <ChevronRight className="h-5 w-5 text-gray-300 group-hover:text-gray-500 transition-colors shrink-0" />
+          </Link>
+        ))}
+      </div>
+
+      {flagged.length > 0 && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 flex gap-2">
+          <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-red-800">
+            Elevated risk flagged for {flagged.map((d) => d.name).join(', ')}. Review the cards below.
+          </p>
         </div>
-        <ChevronRight size={20} color="#9aa5b1" />
-      </Link>
-
-      <div className="d-label">Your conditions</div>
-
-      {loading && <div className="d-card d-empty">Loading your health summary…</div>}
-      {!loading && items.length === 0 && (
-        <div className="d-card d-empty">No entries yet. Log your first symptoms to see trends here.</div>
       )}
 
-      {items.map((c) => {
-        const sev = severity(c.score);
-        const ic = iconFor(c.title);
-        const down = c.delta < 0;
-        return (
-          <Link key={c.id} href={`/conditions/${c.id}`} className="d-card d-cond">
-            <div className="ico" style={{ background: ic.bg, color: ic.color }}>
-              <ic.Icon size={22} />
-            </div>
-            <div className="mid">
-              <div className="title">{c.title}</div>
-              {c.subtitle && <div className="sub">{c.subtitle}</div>}
-              <div className="score">
-                <strong style={{ color: sev.fg }}>{c.score.toFixed(1)}</strong>
-                <small>/10</small>
-                <span className="d-chip" style={{ background: sev.bg, color: sev.fg }}>{sev.label}</span>
-              </div>
-              {c.delta !== 0 && (
-                <div className="delta" style={{ color: down ? '#1f7a45' : '#c62f3a' }}>
-                  {down ? '▼' : '▲'} {Math.abs(c.delta).toFixed(1)} vs previous entry
+      {/* Burden summary */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold text-sm text-gray-900">Symptom Burden Score</h2>
+          {burden !== null && <SeverityBadge severity={burdenSev!} />}
+        </div>
+        <div className="flex items-end justify-between">
+          <div className="flex items-baseline gap-1">
+            <span className="text-4xl font-bold tabular-nums" style={{ color: burdenSev?.color ?? '#9CA3AF' }}>
+              {burden !== null ? burden.toFixed(1) : '—'}
+            </span>
+            <span className="text-sm text-gray-400">/10</span>
+          </div>
+          <Sparkline data={burdenSeries} color="#00897B" width={140} height={44} />
+        </div>
+        {latest && (
+          <p className="text-[11px] text-gray-400 mt-2">
+            From log from {new Date(latest.loggedAt).toLocaleDateString()}
+          </p>
+        )}
+      </div>
+
+      {/* Disease risk cards */}
+      <div className="space-y-3">
+        <h2 className="font-bold text-sm text-gray-900 px-1">Disease Risk Prediction</h2>
+        {!prediction ? (
+          <div className="bg-white rounded-2xl border border-gray-200 p-6 text-center">
+            <p className="text-sm text-gray-500">
+              No prediction yet — log your symptoms to generate disease risk scores.
+            </p>
+          </div>
+        ) : (
+          DISEASES.map((d) => {
+            const pred = diseases[d.key];
+            if (!pred) return null;
+            const probSev = probabilitySeverity(pred.probability);
+            const riskSev = riskScoreSeverity(pred.riskScore);
+            const elevated = pred.severity === 'High' || pred.predicted === 1;
+            return (
+              <Link
+                key={d.key}
+                href={`/conditions/${diseaseRouteId(d.key)}`}
+                className={`block bg-white rounded-2xl border p-4 transition-shadow hover:shadow-md ${
+                  elevated ? 'border-red-300' : 'border-gray-200'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: `${d.color}1A` }}
+                  >
+                    <SymptomIcon name={d.icon} className="h-5 w-5" style={{ color: d.color }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-gray-900 text-sm">{d.name}</h3>
+                      {elevated && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-semibold">
+                          <AlertTriangle className="h-3 w-3" /> Flagged
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500">{d.fullName}</p>
+                    <div className="flex items-center gap-4 mt-2 text-xs">
+                      <span className="text-gray-500">
+                        Probability{' '}
+                        <strong className="tabular-nums" style={{ color: probSev.color }}>
+                          {(pred.probability * 100).toFixed(0)}%
+                        </strong>
+                      </span>
+                      <SeverityBadge severity={probSev} />
+                      <span className="text-gray-500">
+                        Risk score{' '}
+                        <strong className="tabular-nums" style={{ color: riskSev.color }}>
+                          {(pred.riskScore * 100).toFixed(0)}%
+                        </strong>
+                      </span>
+                      <SeverityBadge severity={riskSev} />
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 text-gray-300 shrink-0 mt-1" />
                 </div>
-              )}
-            </div>
-            <Spark data={c.series} color={ic.color} />
-          </Link>
-        );
-      })}
+              </Link>
+            );
+          })
+        )}
+      </div>
+
+      <p className="text-[11px] text-gray-400 text-center leading-relaxed">
+        Predictions are model outputs from your logged symptom intensities — not a
+        medical diagnosis.
+      </p>
     </div>
   );
 }
