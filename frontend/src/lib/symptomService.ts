@@ -1,228 +1,299 @@
-// Symptom intensity data service — Aimher API spec.
-//   POST /symptoms                      → log entry + symptomBurdenScore
-//   GET  /symptoms/history?limit&offset → paginated history
-//   POST /predictions/from-symptoms     → 6-disease risk prediction
+// Symptom log data service.
 //
-// Falls back to localStorage when the API is unreachable so the UI works
-// before the backend is deployed.
+// Currently backed by localStorage + seeded demo data so the UI is fully
+// usable before the backend exists. All functions are async with REST-shaped
+// signatures — swap the implementations for fetch() calls later without
+// touching the UI.
+//
+// TODO(backend): replace localStorage internals with:
+//   GET  /api/symptom-logs
+//   POST /api/symptom-logs
+//   GET  /api/symptom-logs/summary
 
-import { apiFetch } from './api';
-import type { SymptomPayload } from './symptoms';
-
-// ─── API response types ─────────────────────────────────────────────────────
-
-export interface DiseasePrediction {
-  probability: number;
-  predicted: 0 | 1;
-  severity: 'Low' | 'Moderate' | 'High';
-  riskScore: number;
-  riskSeverity: 'Minimal' | 'Mild' | 'Moderate' | 'Severe';
-}
+import { CONDITIONS, SYMPTOMS } from './symptoms';
+import { apiFetch, withApiFallback } from './apiClient';
 
 export interface SymptomLogEntry {
   id: string;
-  userId?: string;
+  /** ISO date YYYY-MM-DD */
+  date: string;
+  /** ISO timestamp */
   loggedAt: string;
-  data: SymptomPayload;
-  symptomBurdenScore: number;
-  /** present when a prediction was run for this entry (local cache) */
-  prediction?: DiseasePredictionMap | null;
+  /** symptomId -> intensity 0-10 (only symptoms the user rated) */
+  values: Record<string, number>;
 }
 
-export type DiseasePredictionMap = Record<string, DiseasePrediction>;
-
-export interface HistoryResponse {
-  data: SymptomLogEntry[];
-  total: number;
-  limit: number;
-  offset: number;
+export interface ConditionSummary {
+  conditionId: string;
+  /** latest burden score 0-10 (avg of its symptoms on the most recent entry) */
+  latestBurden: number | null;
+  latestDate: string | null;
+  /** burden 7 days ago for delta, if available */
+  previousBurden: number | null;
+  /** 14-day daily burden series (null = no data that day) */
+  series: { date: string; value: number | null }[];
+  entryCount: number;
+  /** true when the condition's red-flag symptom crossed its threshold */
+  redFlag: boolean;
 }
 
-export interface PredictResponse {
-  diseases: DiseasePredictionMap;
-  symptomBurdenScore: number;
-  pcosLabel: number;
-}
+const STORAGE_KEY = 'aimher-symptom-logs-v1';
+const SEED_KEY = 'aimher-symptom-logs-seeded-v1';
 
-// ─── localStorage fallback ──────────────────────────────────────────────────
+const delay = (ms = 120) => new Promise((r) => setTimeout(r, ms));
 
-const STORE_KEY = 'aimher-symptom-logs-v2';
-const PREDICTION_KEY = 'aimher-latest-prediction';
-
-function readLocal(): SymptomLogEntry[] {
+function readStore(): SymptomLogEntry[] {
   if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(window.localStorage.getItem(STORE_KEY) ?? '[]');
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as SymptomLogEntry[]) : [];
   } catch {
     return [];
   }
 }
 
-function writeLocal(entries: SymptomLogEntry[]) {
-  window.localStorage.setItem(STORE_KEY, JSON.stringify(entries));
+function writeStore(entries: SymptomLogEntry[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
 }
 
-function seedIfEmpty() {
-  if (typeof window === 'undefined') return;
-  if (window.localStorage.getItem(STORE_KEY)) return;
-  // 14 days of plausible demo data
-  const phases = ['Menstrual', 'Follicular', 'Ovulatory', 'Luteal'] as const;
+function dateKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return dateKey(d);
+}
+
+function toIntensity(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.min(10, value));
+  if (value && typeof value === 'object' && 'intensity' in value) {
+    return toIntensity((value as { intensity: unknown }).intensity);
+  }
+  return null;
+}
+
+function normalizeRemoteEntry(raw: any): SymptomLogEntry | null {
+  if (!raw) return null;
+  const values: Record<string, number> = {};
+  const source = raw.values ?? raw.symptoms ?? raw.entries ?? {};
+
+  if (Array.isArray(source)) {
+    source.forEach((item: any) => {
+      const id = item?.symptomId ?? item?.symptom_id ?? item?.id;
+      const intensity = toIntensity(item?.intensity ?? item?.value ?? item?.score);
+      if (id && intensity !== null) values[String(id)] = intensity;
+    });
+  } else if (source && typeof source === 'object') {
+    Object.entries(source).forEach(([id, value]) => {
+      const intensity = toIntensity(value);
+      if (intensity !== null) values[id] = intensity;
+    });
+  }
+
+  const stamp = raw.date ?? raw.loggedAt ?? raw.createdAt ?? raw.created_at;
+  const date = stamp ? String(stamp).slice(0, 10) : dateKey(new Date());
+
+  return {
+    id: String(raw.id ?? crypto.randomUUID()),
+    date,
+    loggedAt: String(raw.loggedAt ?? raw.createdAt ?? raw.created_at ?? new Date().toISOString()),
+    values,
+  };
+}
+
+// Deterministic pseudo-random so seeded demo data is stable per day
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed * 9999 + 7) * 10000;
+  return x - Math.floor(x);
+}
+
+function generateSeedEntries(): SymptomLogEntry[] {
   const entries: SymptomLogEntry[] = [];
   for (let i = 13; i >= 0; i--) {
-    if (i !== 0 && Math.random() < 0.2) continue;
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const day = ((d.getDate() - 1) % 28) + 1;
-    const phase = phases[Math.min(3, Math.floor((day - 1) / 7))];
-    const entries_vas = () => Math.round(Math.random() * 10 * 2) / 2;
+    // skip ~20% of days to make the chart look realistic
+    if (seededRandom(i * 31 + 3) < 0.2 && i !== 0) continue;
+    const values: Record<string, number> = {};
+    SYMPTOMS.forEach((s, idx) => {
+      // some symptoms are consistently low, others trend upward over time
+      const trend = i < 4 ? (4 - i) * 0.15 : 0; // worsening recently
+      const base = seededRandom(i * 97 + idx * 13);
+      let v = Math.round(base * 10);
+      // keep a few symptoms near zero most days
+      if (['abnormal_bleeding', 'chest_discomfort', 'shortness_of_breath'].includes(s.id) && base < 0.6) {
+        v = Math.round(base * 3);
+      }
+      v = Math.min(10, Math.max(0, v + Math.round(trend)));
+      if (seededRandom(i * 57 + idx) > 0.15) values[s.id] = v;
+    });
     entries.push({
       id: `seed-${i}`,
-      loggedAt: d.toISOString(),
-      symptomBurdenScore: 0,
-      data: {
-        day_of_cycle: day,
-        cycle_phase: phase,
-        breast_soreness_vas: entries_vas(),
-        painful_touch_vas: entries_vas(),
-        pelvic_pressure_vas: entries_vas(),
-        bloating_delta_cm: Math.round(Math.random() * 30) / 10,
-        fatigue_mfi5_vas: entries_vas(),
-        acne_severity_likert: Math.floor(Math.random() * 5),
-        hirsutism_mfg_score: Math.floor(Math.random() * 36),
-      },
+      date: daysAgo(i),
+      loggedAt: `${daysAgo(i)}T08:30:00.000Z`,
+      values,
     });
   }
-  // compute burden scores deterministically-ish
-  entries.forEach((e) => {
-    const d = e.data;
-    e.symptomBurdenScore =
-      Math.round(
-        ((d.breast_soreness_vas + d.painful_touch_vas + d.pelvic_pressure_vas +
-          d.fatigue_mfi5_vas + d.acne_severity_likert * 2.5 +
-          d.hirsutism_mfg_score / 3.6 + d.bloating_delta_cm * 0.2) / 7) * 10
-      ) / 10;
-  });
-  writeLocal(entries);
+  return entries;
 }
 
-// ─── Public API ─────────────────────────────────────────────────────────────
-
-export async function logSymptoms(payload: SymptomPayload): Promise<SymptomLogEntry> {
-  try {
-    return await apiFetch<SymptomLogEntry>('/symptoms', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    // offline/dev fallback
-    seedIfEmpty();
-    const entries = readLocal();
-    const entry: SymptomLogEntry = {
-      id: crypto.randomUUID(),
-      loggedAt: new Date().toISOString(),
-      data: payload,
-      symptomBurdenScore: computeBurden(payload),
-    };
-    writeLocal([entry, ...entries]);
-    return entry;
-  }
-}
-
-export async function getSymptomHistory(
-  limit = 50,
-  offset = 0
-): Promise<HistoryResponse> {
-  try {
-    return await apiFetch<HistoryResponse>(
-      `/symptoms/history?limit=${limit}&offset=${offset}`
-    );
-  } catch {
-    seedIfEmpty();
-    const entries = readLocal().sort((a, b) =>
-      a.loggedAt < b.loggedAt ? 1 : -1
-    );
-    return {
-      data: entries.slice(offset, offset + limit),
-      total: entries.length,
-      limit,
-      offset,
-    };
-  }
-}
-
-export async function predictFromSymptoms(
-  payload: SymptomPayload
-): Promise<PredictResponse> {
-  try {
-    const res = await apiFetch<PredictResponse>('/predictions/from-symptoms', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(PREDICTION_KEY, JSON.stringify(res));
-    }
-    return res;
-  } catch {
-    // fallback: deterministic pseudo-prediction from payload values
-    const diseases: DiseasePredictionMap = {};
-    const keys = ['Infertility', 'Dysmenorrhea', 'PMDD', 'T2D', 'CVD', 'Endometrial'];
-    keys.forEach((k, i) => {
-      const base =
-        (payload.breast_soreness_vas + payload.painful_touch_vas +
-          payload.pelvic_pressure_vas + payload.fatigue_mfi5_vas) /
-        40;
-      const p = Math.min(0.95, Math.max(0.05, base * (0.7 + i * 0.08) + payload.acne_severity_likert * 0.01));
-      diseases[k] = {
-        probability: p,
-        predicted: p >= 0.5 ? 1 : 0,
-        severity: p < 0.33 ? 'Low' : p < 0.66 ? 'Moderate' : 'High',
-        riskScore: Math.min(0.99, p * 0.85),
-        riskSeverity: 'Mild',
-      };
-    });
-    const res: PredictResponse = {
-      diseases,
-      symptomBurdenScore: computeBurden(payload),
-      pcosLabel: 0,
-    };
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(PREDICTION_KEY, JSON.stringify(res));
-    }
-    return res;
-  }
-}
-
-/** Latest cached prediction (from API or fallback) */
-export function getCachedPrediction(): PredictResponse | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(PREDICTION_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Attach a prediction to the most recent local entry (fallback mode only) */
-export function attachPredictionToLatest(pred: PredictResponse) {
+async function ensureSeeded() {
   if (typeof window === 'undefined') return;
-  const entries = readLocal();
-  if (entries.length) {
-    entries[0] = { ...entries[0], prediction: pred.diseases };
-    writeLocal(entries);
+  if (!window.localStorage.getItem(SEED_KEY)) {
+    writeStore(generateSeedEntries());
+    window.localStorage.setItem(SEED_KEY, '1');
   }
 }
 
-function computeBurden(p: SymptomPayload): number {
-  const raw =
-    p.breast_soreness_vas +
-    p.painful_touch_vas +
-    p.pelvic_pressure_vas +
-    p.fatigue_mfi5_vas +
-    p.acne_severity_likert * 2.5 +
-    p.hirsutism_mfg_score / 3.6 +
-    p.bloating_delta_cm * 0.2;
-  return Math.round((raw / 7) * 10) / 10;
+export async function getSymptomLogs(): Promise<SymptomLogEntry[]> {
+  return withApiFallback(
+    async () => {
+      const raw = await apiFetch<any>('/symptoms/history?limit=100');
+      const list = Array.isArray(raw) ? raw : (raw?.entries ?? raw?.logs ?? []);
+      return list
+        .map(normalizeRemoteEntry)
+        .filter((entry: SymptomLogEntry | null): entry is SymptomLogEntry => entry !== null)
+        .sort((a: SymptomLogEntry, b: SymptomLogEntry) => (a.date < b.date ? 1 : -1));
+    },
+    async () => {
+      await ensureSeeded();
+      await delay();
+      return readStore().sort((a, b) => (a.date < b.date ? 1 : -1));
+    }
+  );
 }
 
-export { computeBurden };
+export async function saveSymptomLog(values: Record<string, number>): Promise<SymptomLogEntry> {
+  const today = dateKey(new Date());
+  return withApiFallback(
+    async () => {
+      const raw = await apiFetch<any>('/symptoms', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: today,
+          values,
+          symptoms: Object.entries(values).map(([symptomId, intensity]) => ({ symptomId, intensity })),
+        }),
+      });
+      const entry = normalizeRemoteEntry(raw) ?? {
+        id: crypto.randomUUID(),
+        date: today,
+        loggedAt: new Date().toISOString(),
+        values,
+      };
+      writeStore([entry, ...readStore().filter((e) => e.date !== today)]);
+      return entry;
+    },
+    async () => {
+      await ensureSeeded();
+      const entries = readStore();
+      // one entry per day — merge into today's entry if it exists
+      const existing = entries.find((e) => e.date === today);
+      const entry: SymptomLogEntry = existing ?? {
+        id: crypto.randomUUID(),
+        date: today,
+        loggedAt: new Date().toISOString(),
+        values: {},
+      };
+      entry.values = { ...entry.values, ...values };
+      entry.loggedAt = new Date().toISOString();
+      const next = existing ? entries.map((e) => (e.id === entry.id ? entry : e)) : [...entries, entry];
+      writeStore(next);
+      await delay(200);
+      return entry;
+    }
+  );
+}
+
+function burdenForEntry(entry: SymptomLogEntry, symptomIds: string[]): number | null {
+  const vals = symptomIds
+    .map((id) => entry.values[id])
+    .filter((v): v is number => typeof v === 'number');
+  if (vals.length === 0) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+export async function getConditionSummaries(days = 14): Promise<ConditionSummary[]> {
+  await ensureSeeded();
+  const entries = readStore().sort((a, b) => (a.date < b.date ? -1 : 1));
+  const today = new Date();
+
+  return CONDITIONS.map((cond) => {
+    const series: { date: string; value: number | null }[] = [];
+    const byDate = new Map<string, SymptomLogEntry>();
+    entries.forEach((e) => byDate.set(e.date, e));
+
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = dateKey(d);
+      const entry = byDate.get(key);
+      series.push({ date: key, value: entry ? burdenForEntry(entry, cond.symptomIds) : null });
+    }
+
+    const withData = series.filter((p) => p.value !== null);
+    const latest = [...withData].reverse()[0] ?? null;
+    const previous = withData.length > 1 ? withData[withData.length - 2] : null;
+
+    // red flag: latest logged value of the flag symptom crossed threshold
+    let redFlag = false;
+    if (cond.redFlagSymptomId && cond.redFlagThreshold !== undefined) {
+      const flagEntry = [...entries].reverse().find(
+        (e) => typeof e.values[cond.redFlagSymptomId!] === 'number'
+      );
+      redFlag =
+        flagEntry !== undefined &&
+        flagEntry.values[cond.redFlagSymptomId] >= cond.redFlagThreshold;
+    }
+
+    return {
+      conditionId: cond.id,
+      latestBurden: latest?.value ?? null,
+      latestDate: latest?.date ?? null,
+      previousBurden: previous?.value ?? null,
+      series,
+      entryCount: entries.filter((e) =>
+        cond.symptomIds.some((id) => typeof e.values[id] === 'number')
+      ).length,
+      redFlag,
+    };
+  });
+}
+
+export interface ConditionDetail {
+  summary: ConditionSummary;
+  /** per-symptom latest values + averages for the condition */
+  symptoms: {
+    symptomId: string;
+    latest: number | null;
+    average: number | null;
+  }[];
+  /** raw entries that contain at least one of this condition's symptoms */
+  entries: SymptomLogEntry[];
+}
+
+export async function getConditionDetail(conditionId: string, days = 30): Promise<ConditionDetail | null> {
+  const cond = CONDITIONS.find((c) => c.id === conditionId);
+  if (!cond) return null;
+  const summaries = await getConditionSummaries(days);
+  const summary = summaries.find((s) => s.conditionId === conditionId);
+  if (!summary) return null;
+
+  const entries = (await getSymptomLogs()).filter((e) =>
+    cond.symptomIds.some((id) => typeof e.values[id] === 'number')
+  );
+
+  const symptoms = cond.symptomIds.map((sid) => {
+    const vals = entries
+      .map((e) => e.values[sid])
+      .filter((v): v is number => typeof v === 'number');
+    return {
+      symptomId: sid,
+      latest: vals.length ? vals[0] : null, // entries sorted newest-first
+      average: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null,
+    };
+  });
+
+  return { summary: summary!, symptoms, entries };
+}

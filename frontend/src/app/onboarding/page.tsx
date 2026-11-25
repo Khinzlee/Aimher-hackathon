@@ -1,14 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ArrowRight, Check, HeartPulse, ClipboardList, Camera } from "lucide-react";
-import { DISEASES } from "@/lib/symptoms";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Camera,
+  Check,
+  ClipboardList,
+  HeartPulse,
+  Sparkles,
+  User,
+} from "lucide-react";
+import { CONDITIONS } from "@/lib/symptoms";
 import { SymptomIcon } from "@/components/SymptomIcon";
 
-const TEAL = "#00897B";
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 4;
 
 interface Profile {
   full_name: string;
@@ -17,9 +26,46 @@ interface Profile {
   focus: string[];
 }
 
-const inputCls =
-  "w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition";
-const labelCls = "block text-sm font-medium text-gray-700 mb-1.5";
+const titles = [
+  {
+    eyebrow: "STEP 01 · ABOUT YOU",
+    title: "Let's start with you",
+    sub: "A few details help us personalise your health insights.",
+  },
+  {
+    eyebrow: "STEP 02 · YOUR FOCUS",
+    title: "What matters to you?",
+    sub: "Choose the areas you'd like to keep an eye on.",
+  },
+  {
+    eyebrow: "STEP 03 · HOW IT WORKS",
+    title: "Your daily check-in",
+    sub: "Simple tools that turn how you feel into useful trends.",
+  },
+  {
+    eyebrow: "STEP 04 · READY",
+    title: "You're all set",
+    sub: "Your personal health space is ready to go.",
+  },
+];
+
+const features = [
+  {
+    icon: ClipboardList,
+    title: "Log symptoms daily",
+    desc: "Rate intensity from 0–10 for the areas you picked — takes under a minute.",
+  },
+  {
+    icon: HeartPulse,
+    title: "Track condition burden",
+    desc: "See how your symptoms trend for each condition over time.",
+  },
+  {
+    icon: Camera,
+    title: "rPPG passive sensing",
+    desc: "Capture heart rate, HRV and SpO₂ using your camera.",
+  },
+];
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -40,7 +86,9 @@ export default function OnboardingPage() {
   const toggleFocus = (id: string) => {
     setProfile((p) => ({
       ...p,
-      focus: p.focus.includes(id) ? p.focus.filter((f) => f !== id) : [...p.focus, id],
+      focus: p.focus.includes(id)
+        ? p.focus.filter((f) => f !== id)
+        : [...p.focus, id],
     }));
   };
 
@@ -53,189 +101,219 @@ export default function OnboardingPage() {
   };
 
   const stepValid =
-    step === 0 ? profile.full_name.trim().length > 0 && !!profile.date_of_birth && !!profile.gender
-    : step === 1 ? profile.focus.length > 0
-    : true;
+    step === 0
+      ? profile.full_name.trim().length > 0 &&
+        !!profile.date_of_birth &&
+        !!profile.gender
+      : step === 1
+        ? profile.focus.length > 0
+        : true;
 
-  const titles = [
-    { title: "Personal Information", sub: "Tell us a bit about yourself" },
-    { title: "What would you like to track?", sub: "Pick the areas that matter to you" },
-    { title: "Daily symptom logging", sub: "Rate how you feel in seconds" },
-    { title: "You're all set", sub: "Here's what you can do" },
-  ].slice(0, TOTAL_STEPS);
+  const selectedFocus = CONDITIONS.filter((c) => profile.focus.includes(c.id));
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-teal-50 via-white to-white">
-      <div className="flex-1 flex flex-col px-6 py-8 max-w-md mx-auto w-full">
-        <button
-          onClick={() => (step === 0 ? router.push("/") : go(step - 1))}
-          className="flex items-center gap-2 text-gray-500 hover:text-gray-800 transition-colors mb-8 self-start"
-        >
-          <ArrowLeft className="h-4 w-4" /> {step === 0 ? "Back" : "Back"}
-        </button>
-
-        <div className="flex justify-between items-center mb-4">
-          <span className="text-sm text-gray-500">
-            Step {step + 1} of {TOTAL_STEPS}
-          </span>
-          <span className="text-sm font-semibold" style={{ color: TEAL }}>
-            {Math.round(((step + 1) / TOTAL_STEPS) * 100)}%
-          </span>
+    <main className="ob-page">
+      <div className="ob-card">
+        <div className="ob-top">
+          <button
+            type="button"
+            className="ob-back"
+            onClick={() => (step === 0 ? router.push("/") : go(step - 1))}
+          >
+            <ArrowLeft size={18} /> Back
+          </button>
+          <div className="ob-brand">
+            <Image src="/logo.png" alt="" width={26} height={26} />
+            <span>AIMHER</span>
+          </div>
         </div>
-        <div className="h-1.5 bg-gray-100 rounded-full mb-8 overflow-hidden">
-          <motion.div
-            className="h-full rounded-full"
-            style={{ backgroundColor: TEAL }}
-            animate={{ width: `${((step + 1) / TOTAL_STEPS) * 100}%` }}
-            transition={{ duration: 0.3 }}
-          />
+
+        <div className="ob-progress" aria-label={`Step ${step + 1} of ${TOTAL_STEPS}`}>
+          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+            <span key={i} className={i <= step ? "done" : ""} />
+          ))}
         </div>
 
         <AnimatePresence mode="wait" custom={direction}>
-          <motion.div
+          <motion.section
             key={step}
             custom={direction}
-            initial={{ opacity: 0, x: direction * 24 }}
+            initial={{ opacity: 0, x: direction * 22 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: direction * -24 }}
-            transition={{ duration: 0.25 }}
-            className="flex-1 flex flex-col"
+            exit={{ opacity: 0, x: direction * -22 }}
+            transition={{ duration: 0.22 }}
+            className="ob-stage"
           >
-            <div className="mb-8">
-              <h1 className="text-2xl font-bold text-gray-900">{titles[step].title}</h1>
-              <p className="text-gray-500 mt-1">{titles[step].sub}</p>
-            </div>
+            <header className="ob-head">
+              <span className="ob-eyebrow">{titles[step].eyebrow}</span>
+              <h1>{titles[step].title}</h1>
+              <p>{titles[step].sub}</p>
+            </header>
 
-            {step === 0 && (
-              <div className="space-y-5 flex-1">
-                <div>
-                  <label className={labelCls}>Full Name</label>
-                  <input
-                    className={inputCls}
-                    placeholder="Enter your full name"
-                    value={profile.full_name}
-                    onChange={(e) => setProfile({ ...profile, full_name: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Date of Birth</label>
-                  <input
-                    className={inputCls}
-                    type="date"
-                    value={profile.date_of_birth}
-                    onChange={(e) => setProfile({ ...profile, date_of_birth: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Gender</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { value: "female", label: "Female" },
-                      { value: "male", label: "Male" },
-                    ].map((g) => (
-                      <button
-                        key={g.value}
-                        type="button"
-                        onClick={() => setProfile({ ...profile, gender: g.value })}
-                        className={`rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${
-                          profile.gender === g.value
-                            ? "text-white border-transparent"
-                            : "border-gray-300 text-gray-600 bg-white hover:border-teal-300"
-                        }`}
-                        style={profile.gender === g.value ? { backgroundColor: TEAL } : {}}
-                      >
-                        {g.label}
-                      </button>
-                    ))}
+            <div className="ob-body">
+              {step === 0 && (
+                <div className="ob-fields">
+                  <div className="ob-field">
+                    <label htmlFor="ob-name">Full name</label>
+                    <input
+                      id="ob-name"
+                      className="ob-input"
+                      placeholder="e.g. Alex Morgan"
+                      value={profile.full_name}
+                      onChange={(e) =>
+                        setProfile({ ...profile, full_name: e.target.value })
+                      }
+                    />
                   </div>
-                </div>
-              </div>
-            )}
 
-            {step === 1 && (
-              <div className="space-y-3 flex-1">
-                {DISEASES.map((c) => {
-                  const selected = profile.focus.includes(c.key);
-                  return (
-                    <button
-                      key={c.key}
-                      type="button"
-                      onClick={() => toggleFocus(c.key)}
-                      className={`w-full flex items-center gap-3 rounded-2xl border p-4 text-left transition-all ${
-                        selected ? "border-transparent shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"
-                      }`}
-                      style={selected ? { backgroundColor: `${c.color}14`, borderColor: c.color } : {}}
-                    >
-                      <span
-                        className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
-                        style={{ backgroundColor: `${c.color}1A` }}
-                      >
-                        <SymptomIcon name={c.icon} className="h-5 w-5" style={{ color: c.color }} />
-                      </span>
-                      <span className="flex-1">
-                        <span className="block font-semibold text-gray-900 text-sm">{c.name}</span>
-                        <span className="block text-xs text-gray-500">{c.fullName}</span>
-                      </span>
-                      <span
-                        className={`h-6 w-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                          selected ? "border-transparent" : "border-gray-300"
-                        }`}
-                        style={selected ? { backgroundColor: c.color } : {}}
-                      >
-                        {selected && <Check className="h-4 w-4 text-white" />}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                  <div className="ob-field">
+                    <label htmlFor="ob-dob">Date of birth</label>
+                    <input
+                      id="ob-dob"
+                      className="ob-input"
+                      type="date"
+                      value={profile.date_of_birth}
+                      onChange={(e) =>
+                        setProfile({ ...profile, date_of_birth: e.target.value })
+                      }
+                    />
+                  </div>
 
-            {step === 2 && (
-              <div className="space-y-4 flex-1">
-                {[
-                  { icon: ClipboardList, title: "Log symptoms daily", desc: "Rate intensity 0–10 for the areas you picked — takes under a minute." },
-                  { icon: HeartPulse, title: "Track condition burden", desc: "See how your symptoms trend for each condition over time." },
-                  { icon: Camera, title: "rPPG passive sensing", desc: "Capture heart rate, HRV, SpO₂ and more using your camera." },
-                ].map((f) => (
-                  <div key={f.title} className="flex items-start gap-3 bg-white rounded-2xl border border-gray-200 p-4">
-                    <span
-                      className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: `${TEAL}1A` }}
-                    >
-                      <f.icon className="h-5 w-5" style={{ color: TEAL }} />
-                    </span>
-                    <div>
-                      <p className="font-semibold text-gray-900 text-sm">{f.title}</p>
-                      <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{f.desc}</p>
+                  <div className="ob-field">
+                    <label>Gender</label>
+                    <div className="ob-seg">
+                      {[
+                        { value: "female", label: "Female" },
+                        { value: "male", label: "Male" },
+                        { value: "other", label: "Prefer not to say" },
+                      ].map((g) => {
+                        const active = profile.gender === g.value;
+                        return (
+                          <button
+                            key={g.value}
+                            type="button"
+                            className={`ob-seg-btn${active ? " active" : ""}`}
+                            onClick={() =>
+                              setProfile({ ...profile, gender: g.value })
+                            }
+                          >
+                            <span className="ob-seg-ico">
+                              <User size={18} />
+                            </span>
+                            <span>{g.label}</span>
+                            {active && <Check className="ob-seg-check" size={16} />}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              )}
 
-            <div className="pt-8">
-              {step < TOTAL_STEPS - 1 ? (
-                <button
-                  onClick={() => go(step + 1)}
-                  disabled={!stepValid}
-                  className="w-full h-12 rounded-xl font-semibold text-white disabled:opacity-40 flex items-center justify-center gap-2"
-                  style={{ backgroundColor: TEAL }}
-                >
-                  Continue <ArrowRight className="h-4 w-4" />
-                </button>
-              ) : (
-                <button
-                  onClick={finish}
-                  className="w-full h-12 rounded-xl font-semibold text-white flex items-center justify-center gap-2"
-                  style={{ backgroundColor: TEAL }}
-                >
-                  Go to Dashboard <ArrowRight className="h-4 w-4" />
-                </button>
+              {step === 1 && (
+                <div className="ob-focus-grid">
+                  {CONDITIONS.map((c) => {
+                    const selected = profile.focus.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`ob-focus${selected ? " active" : ""}`}
+                        style={
+                          {
+                            "--focus-color": c.color,
+                            "--focus-tint": `${c.color}14`,
+                          } as CSSProperties
+                        }
+                        onClick={() => toggleFocus(c.id)}
+                      >
+                        <span className={`ob-check${selected ? " on" : ""}`}>
+                          {selected && <Check size={13} strokeWidth={3} />}
+                        </span>
+                        <span className="ob-focus-ico">
+                          <SymptomIcon name={c.icon} className="ob-icon" />
+                        </span>
+                        <strong>{c.name}</strong>
+                        <small>{c.fullName}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {step === 2 && (
+                <div className="ob-features">
+                  {features.map((f, i) => (
+                    <div className="ob-feature" key={f.title}>
+                      <span className="ob-feature-ico">
+                        <f.icon size={20} />
+                      </span>
+                      <div>
+                        <b>
+                          <span className="ob-num">0{i + 1}</span>
+                          {f.title}
+                        </b>
+                        <p>{f.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {step === 3 && (
+                <div className="ob-success">
+                  <motion.div
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 220, damping: 18 }}
+                    className="ob-success-badge"
+                  >
+                    <Sparkles size={38} />
+                  </motion.div>
+                  <h2>
+                    Welcome
+                    {profile.full_name
+                      ? `, ${profile.full_name.trim().split(" ")[0]}`
+                      : ""}
+                    !
+                  </h2>
+                  <p>
+                    Your dashboard is ready. Start by logging how you feel today,
+                    or jump straight into an rPPG measurement.
+                  </p>
+                  {selectedFocus.length > 0 && (
+                    <div className="ob-summary">
+                      {selectedFocus.map((c) => (
+                        <span key={c.id}>{c.name}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          </motion.div>
+          </motion.section>
         </AnimatePresence>
+
+        <div className="ob-actions">
+          {step < TOTAL_STEPS - 1 ? (
+            <button
+              type="button"
+              className="ob-next"
+              disabled={!stepValid}
+              onClick={() => go(step + 1)}
+            >
+              Continue <ArrowRight size={18} />
+            </button>
+          ) : (
+            <button type="button" className="ob-next" onClick={finish}>
+              Go to dashboard <ArrowRight size={18} />
+            </button>
+          )}
+          <p className="ob-footnote">
+            Step {step + 1} of {TOTAL_STEPS} · Your data stays on your device
+          </p>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
