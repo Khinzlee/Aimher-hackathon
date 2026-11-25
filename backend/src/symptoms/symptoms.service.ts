@@ -22,6 +22,8 @@ export class SymptomsService {
         acne_severity_likert: dto.acne_severity_likert,
         hirsutism_mfg_score: dto.hirsutism_mfg_score,
         symptom_burden_score: symptomBurdenScore,
+        checkType: dto.check_type ?? 'checkin',
+        extraData: dto.extra_data ? JSON.stringify(dto.extra_data) : null,
       },
     });
   }

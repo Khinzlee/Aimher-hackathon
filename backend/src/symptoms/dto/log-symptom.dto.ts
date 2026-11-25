@@ -1,6 +1,7 @@
 import {
   IsEnum,
   IsNumber,
+  IsObject,
   IsOptional,
   Max,
   Min,
@@ -11,6 +12,12 @@ export enum CyclePhase {
   FOLLICULAR = 'Follicular',
   OVULATORY = 'Ovulatory',
   LUTEAL = 'Luteal',
+}
+
+export enum CheckType {
+  MORNING = 'morning',
+  EVENING = 'evening',
+  CHECKIN = 'checkin',
 }
 
 export class LogSymptomDto {
@@ -54,4 +61,12 @@ export class LogSymptomDto {
   @Min(0)
   @Max(36)
   hirsutism_mfg_score!: number;
+
+  @IsOptional()
+  @IsEnum(CheckType)
+  check_type?: CheckType;
+
+  @IsOptional()
+  @IsObject()
+  extra_data?: Record<string, unknown>;
 }

@@ -12,6 +12,8 @@ model User {
   email        String   @unique
   name         String?
   passwordHash String
+  onboardingCompleted Boolean @default(false)
+  onboardingStep      Int     @default(0)
   createdAt    DateTime @default(now())
   predictions  Prediction[]
   symptomLogs  SymptomLog[]
@@ -46,6 +48,8 @@ model SymptomLog {
   acne_severity_likert  Int
   hirsutism_mfg_score   Int
   symptom_burden_score  Float?
+  checkType             String   @default("checkin")
+  extraData             String?
   createdAt             DateTime @default(now())
 
   @@index([userId])
