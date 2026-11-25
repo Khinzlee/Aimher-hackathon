@@ -1,0 +1,11 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+.git
+*.db
+*.db-journal
+inference/.venv
+inference/__pycache__
+**/__pycache__
