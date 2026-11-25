@@ -24,7 +24,7 @@ export async function login(email: string, password: string): Promise<AuthResult
         expiresIn: raw?.expiresIn,
       };
     },
-    async () => ({ accessToken: null, demo: true })
+    async () => ({ accessToken: null, tokenType: 'Bearer', expiresIn: 0, demo: true })
   );
 }
 
@@ -43,6 +43,6 @@ export async function register(name: string, email: string, password: string): P
         expiresIn: raw?.expiresIn,
       };
     },
-    async () => ({ accessToken: null, demo: true })
+    async () => ({ accessToken: null, tokenType: 'Bearer', expiresIn: 0, demo: true })
   );
 }
