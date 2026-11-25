@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  inference:
+    build:
+      context: ./backend/inference
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+    volumes:
+      - ./backend/docs:/app/docs:ro
+      - ./backend/inference/models:/app/models:ro
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      - DATABASE_URL=${DATABASE_URL}
+      - INFERENCE_URL=http://inference:8000
+    depends_on:
+      - inference
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+      - NEXT_PUBLIC_INFERENCE_URL=${NEXT_PUBLIC_INFERENCE_URL:-http://localhost:8000}
+    depends_on:
+      - backend
+    restart: unless-stopped
