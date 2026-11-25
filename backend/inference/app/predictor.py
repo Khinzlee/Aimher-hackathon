@@ -6,13 +6,24 @@ import pandas as pd
 
 DISEASES = ["Infertility", "Dysmenorrhea", "PMDD", "T2D", "CVD", "Endometrial"]
 
+# Model files are in the docs/ directory (mounted as /app/docs in container)
 DOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "docs")
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "models")
+
+# Try docs directory first (where model files actually are), then models as fallback
 BUNDLE_PATH = os.environ.get(
-    "MODEL_BUNDLE", os.path.join(DOCS_DIR, "all_models_bundle.joblib")
+    "MODEL_BUNDLE", 
+    os.path.join(DOCS_DIR, "all_models_bundle.joblib")
 )
+if not os.path.exists(BUNDLE_PATH):
+    BUNDLE_PATH = os.path.join(MODELS_DIR, "all_models_bundle.joblib")
+
 SYMPTOM_BUNDLE_PATH = os.environ.get(
-    "SYMPTOM_MODEL_BUNDLE", os.path.join(DOCS_DIR, "all_models_symptom_bundle.joblib")
+    "SYMPTOM_MODEL_BUNDLE", 
+    os.path.join(DOCS_DIR, "all_models_symptom_bundle.joblib")
 )
+if not os.path.exists(SYMPTOM_BUNDLE_PATH):
+    SYMPTOM_BUNDLE_PATH = os.path.join(MODELS_DIR, "all_models_symptom_bundle.joblib")
 
 # snake_case API fields -> training column names
 FIELD_MAP = {
