@@ -26,12 +26,14 @@ export class RppgV8Controller {
   }
 
   @Post('predict')
+  @HttpCode(200)
   async predict(@Request() req) {
     const data = await this.rppgV8.predictAll(req.user.sub);
     return this.ok(data, 'rPPG v8 predictions computed');
   }
 
   @Post('predict/regression')
+  @HttpCode(200)
   async predictRegression(
     @Request() req,
     @Body() dto: PredictRppgV8RegressionDto,
@@ -41,6 +43,7 @@ export class RppgV8Controller {
   }
 
   @Post('predict/mood')
+  @HttpCode(200)
   async predictMood(@Request() req) {
     const data = await this.rppgV8.predictMood(req.user.sub);
     return this.ok(data, 'rPPG v8 mood check computed');

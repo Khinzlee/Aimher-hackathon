@@ -13,10 +13,13 @@ model User {
   name         String?
   passwordHash String
   createdAt    DateTime @default(now())
+  onboardingCompleted Boolean @default(false)
+  onboardingStep      Int      @default(0)
   predictions  Prediction[]
   symptomLogs  SymptomLog[]
   rppgV8Sessions       RppgV8Session[]
   rppgV8Predictions    RppgV8PredictionResult[]
+  onboardingProfile    OnboardingProfile?
 }
 
 model Prediction {
@@ -106,4 +109,57 @@ model RppgV8PredictionResult {
   moodCheckProbabilities String?
 
   @@index([userId])
+}
+
+model OnboardingProfile {
+  id        String @id @default(cuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Step 1: Personal Info
+  fullName        String?
+  dateOfBirth     DateTime?
+  age             Int?
+  nationality     String?
+  ethnicity       String?
+  gender          String?
+  phoneNumber     String?
+  bloodGroup      String?
+  genotype        String?
+
+  // Step 2: Physical Measurements
+  heightCm Float?
+  weightKg Float?
+  bmi      Float?
+
+  // Step 3: Skin Changes
+  acanthosisNigricans String?
+  hasSkinChanges      Boolean?
+  skinTags            String?
+  scalpHairThinning   String?
+
+  // Step 4: Menstrual History
+  cycleLengthDays   Int?
+  periodsPerYear    Int?
+  lastPeriodDate    DateTime?
+  cycleRegularity   String?
+  bleedingIntensity String?
+
+  // Additional clinical data
+  waistCm           Float?
+  hipCm             Float?
+  nightSweats       String?
+  fatigueLevel      String?
+  familyHistory     Json?
+  highBloodPressure String?
+
+  // Step 5: Wearable
+  selectedWearable String?
+
+  // Step 6: rPPG baseline
+  rppgBaselineCaptured Boolean   @default(false)
+  rppgCapturedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
