@@ -10,6 +10,7 @@ interface VASSliderProps {
   onChange: (value: number) => void;
   min?: number;
   max?: number;
+  step?: number;
   lowLabel?: string;
   highLabel?: string;
 }
@@ -21,6 +22,7 @@ export default function VASSlider({
   onChange,
   min = 0,
   max = 10,
+  step = 1,
   lowLabel = 'None',
   highLabel = 'Severe',
 }: VASSliderProps) {
@@ -57,9 +59,12 @@ export default function VASSlider({
           type="range"
           min={min}
           max={max}
-          step={1}
+          step={step}
           value={value}
-          onChange={(e) => onChange(parseInt(e.target.value, 10))}
+          onChange={(e) => {
+            const v = parseFloat(e.target.value);
+            onChange(step < 1 ? Math.round(v * 10) / 10 : Math.round(v));
+          }}
           onPointerDown={() => setDragging(true)}
           onPointerUp={() => setDragging(false)}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"

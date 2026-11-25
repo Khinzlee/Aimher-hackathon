@@ -20,7 +20,11 @@ export function getAccessToken(): string | null {
   }
 }
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  init: RequestInit = {},
+  opts: { unwrapData?: boolean } = {}
+): Promise<T> {
   const token = getAccessToken();
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -36,14 +40,19 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     const body = await response.json().catch(() => null);
     const error = new Error(body?.message ?? `API request failed (${response.status})`) as Error & {
       errors?: unknown;
+      status?: number;
     };
     error.errors = body?.errors;
+    error.status = response.status;
     throw error;
   }
 
   const body = await response.json();
   // AIMHER envelope: { success, status, message, data, meta }
-  return (body && typeof body === "object" && "data" in body ? body.data : body) as T;
+  // Some endpoints (e.g. /symptoms/history) return { data, total, ... } where
+  // `data` is a payload field, not an envelope — unwrapData:false keeps it whole.
+  const unwrap = opts.unwrapData !== false;
+  return (unwrap && body && typeof body === "object" && "data" in body ? body.data : body) as T;
 }
 
 /** Try the backend, but keep the app usable when it is offline. */

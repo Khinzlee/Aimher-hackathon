@@ -10,7 +10,7 @@ import {
   type CyclePhase,
   type SymptomPayload,
 } from '@/lib/symptoms';
-import { logSymptoms, predictFromSymptoms, attachPredictionToLatest } from '@/lib/symptomService';
+import { logSymptoms, predictFromSymptoms } from '@/lib/symptomService';
 import VASSlider from '@/components/VASSlider';
 import { useNow } from '@/hooks/useNow';
 
@@ -90,8 +90,7 @@ export default function LogPage() {
     setError(null);
     try {
       const entry = await logSymptoms(payload);
-      const prediction = await predictFromSymptoms(entry.data ?? payload);
-      attachPredictionToLatest(prediction);
+      await predictFromSymptoms(entry.data ?? payload);
       router.push('/dashboard');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save. Please try again.');

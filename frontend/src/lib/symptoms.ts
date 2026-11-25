@@ -167,3 +167,116 @@ export function computeConditionBurden(
   if (present.length === 0) return null;
   return present.reduce((a, b) => a + b, 0) / present.length;
 }
+
+// ─── API spec model (backend contract) ─────────────────────────────────────
+// POST /symptoms and POST /predictions/from-symptoms use these 9 fields.
+
+export type CyclePhase = 'Menstrual' | 'Follicular' | 'Ovulatory' | 'Luteal';
+
+export const CYCLE_PHASES: { value: CyclePhase; label: string; days: string }[] = [
+  { value: 'Menstrual', label: 'Menstrual', days: 'Days 1–5' },
+  { value: 'Follicular', label: 'Follicular', days: 'Days 6–13' },
+  { value: 'Ovulatory', label: 'Ovulatory', days: 'Days 14–16' },
+  { value: 'Luteal', label: 'Luteal', days: 'Days 17–28' },
+];
+
+export function cyclePhaseForDay(day: number): CyclePhase {
+  if (day <= 5) return 'Menstrual';
+  if (day <= 13) return 'Follicular';
+  if (day <= 16) return 'Ovulatory';
+  return 'Luteal';
+}
+
+export interface SymptomPayload {
+  day_of_cycle: number;
+  cycle_phase: CyclePhase;
+  breast_soreness_vas: number;
+  painful_touch_vas: number;
+  pelvic_pressure_vas: number;
+  bloating_delta_cm: number;
+  fatigue_mfi5_vas: number;
+  acne_severity_likert: number;
+  hirsutism_mfg_score: number;
+}
+
+export const EMPTY_PAYLOAD: SymptomPayload = {
+  day_of_cycle: 1,
+  cycle_phase: 'Follicular',
+  breast_soreness_vas: 0,
+  painful_touch_vas: 0,
+  pelvic_pressure_vas: 0,
+  bloating_delta_cm: 0,
+  fatigue_mfi5_vas: 0,
+  acne_severity_likert: 0,
+  hirsutism_mfg_score: 0,
+};
+
+/** Disease keys returned by POST /predictions/from-symptoms */
+export const API_DISEASE_KEYS = [
+  'Infertility',
+  'Dysmenorrhea',
+  'PMDD',
+  'T2D',
+  'CVD',
+  'Endometrial',
+] as const;
+
+export type ApiDiseaseKey = (typeof API_DISEASE_KEYS)[number];
+
+/** probability → Low / Moderate / High (spec: <0.33, <0.66, ≥0.66) */
+export function probabilitySeverity(p: number): Severity {
+  if (p < 0.33) return { label: 'Low', color: '#16A34A', bg: '#F0FDF4' };
+  if (p < 0.66) return { label: 'Moderate', color: '#D97706', bg: '#FFFBEB' };
+  return { label: 'High', color: '#DC2626', bg: '#FEF2F2' };
+}
+
+/** riskScore → Minimal / Mild / Moderate / Severe (spec: <0.2, <0.4, <0.6, ≥0.6) */
+export function riskScoreSeverity(s: number): Severity {
+  if (s < 0.2) return { label: 'Minimal', color: '#16A34A', bg: '#F0FDF4' };
+  if (s < 0.4) return { label: 'Mild', color: '#2563EB', bg: '#EFF6FF' };
+  if (s < 0.6) return { label: 'Moderate', color: '#D97706', bg: '#FFFBEB' };
+  return { label: 'Severe', color: '#DC2626', bg: '#FEF2F2' };
+}
+
+/** symptomBurdenScore is on a 0–10 scale — reuse VAS bands */
+export function burdenSeverity(score: number): Severity {
+  return getSeverity(score);
+}
+
+/** Map an API disease key to the UI condition id used in /conditions/[id] */
+export function diseaseRouteId(key: string): string {
+  const map: Record<string, string> = {
+    Infertility: 'infertility',
+    Dysmenorrhea: 'dysmenorrhea',
+    PMDD: 'pmdd',
+    T2D: 't2d',
+    CVD: 'cvd',
+    Endometrial: 'endometrial',
+  };
+  return map[key] ?? key.toLowerCase();
+}
+
+// ─── Disease view-models for prediction UI ─────────────────────────────────
+
+export interface DiseaseInfo extends Condition {
+  /** API prediction key, e.g. "Infertility", "Endometrial" */
+  key: string;
+}
+
+const API_KEY_BY_CONDITION: Record<string, string> = {
+  infertility: 'Infertility',
+  dysmenorrhea: 'Dysmenorrhea',
+  pmdd: 'PMDD',
+  t2d: 'T2D',
+  cvd: 'CVD',
+  endometrial: 'Endometrial',
+};
+
+export const DISEASES: DiseaseInfo[] = CONDITIONS.map((c) => ({
+  ...c,
+  key: API_KEY_BY_CONDITION[c.id] ?? c.id,
+}));
+
+export function diseaseByRouteId(id: string): DiseaseInfo | undefined {
+  return DISEASES.find((d) => diseaseRouteId(d.key) === id || d.key.toLowerCase() === id);
+}

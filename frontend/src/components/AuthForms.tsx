@@ -3,6 +3,17 @@
 import { useState, type FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { apiFetch } from "@/lib/apiClient";
+
+function storeSession(accessToken: string) {
+  window.localStorage.setItem("aimher-token", accessToken);
+  window.localStorage.setItem("accessToken", accessToken);
+}
+
+/** True when the API itself rejected the request (vs. being unreachable). */
+function isApiRejection(err: unknown): boolean {
+  return typeof err === "object" && err !== null && "status" in err;
+}
 
 function EyeIcon({ off }: { off: boolean }) {
   return (
@@ -73,17 +84,20 @@ export function SignIn({ onSwitch }: { onSwitch: () => void }) {
     setError("");
     setLoading(true);
     try {
-      // TODO: replace with your real API call
-      // const res = await fetch("/api/auth/login", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ id, password }),
-      // });
-      // if (!res.ok) throw new Error("Invalid credentials");
-      await new Promise((r) => setTimeout(r, 1200));
+      const res = await apiFetch<{ accessToken: string }>("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: id, password }),
+      });
+      storeSession(res.accessToken);
       router.push("/onboarding");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      if (isApiRejection(err)) {
+        setError(err instanceof Error ? err.message : "Invalid credentials");
+      } else {
+        // Backend unreachable — demo fallback
+        await new Promise((r) => setTimeout(r, 1200));
+        router.push("/onboarding");
+      }
     } finally {
       setLoading(false);
     }
@@ -140,6 +154,7 @@ export function SignIn({ onSwitch }: { onSwitch: () => void }) {
 
 /* ---------------- Sign Up ---------------- */
 export function SignUp({ onSwitch }: { onSwitch: () => void }) {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -158,17 +173,20 @@ export function SignUp({ onSwitch }: { onSwitch: () => void }) {
 
     setLoading(true);
     try {
-      // TODO: replace with your real API call
-      // await fetch("/api/auth/register", {
-      //   method: "POST",
-      //   headers: { "Content-Type": "application/json" },
-      //   body: JSON.stringify({ name, email, password }),
-      // });
-      await new Promise((r) => setTimeout(r, 1200));
-      alert("Account created!");
-      onSwitch();
+      const res = await apiFetch<{ accessToken: string }>("/auth/register", {
+        method: "POST",
+        body: JSON.stringify({ name, email, password }),
+      });
+      if (res?.accessToken) storeSession(res.accessToken);
+      router.push("/onboarding");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      if (isApiRejection(err)) {
+        setError(err instanceof Error ? err.message : "Registration failed");
+      } else {
+        // Backend unreachable — demo fallback
+        await new Promise((r) => setTimeout(r, 1200));
+        onSwitch();
+      }
     } finally {
       setLoading(false);
     }
