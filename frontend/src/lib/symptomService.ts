@@ -11,6 +11,7 @@
 //   GET  /api/symptom-logs/summary
 
 import { CONDITIONS, SYMPTOMS } from './symptoms';
+import { apiFetch, withApiFallback } from './apiClient';
 
 export interface SymptomLogEntry {
   id: string;
@@ -66,6 +67,43 @@ function daysAgo(n: number): string {
   return dateKey(d);
 }
 
+function toIntensity(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.min(10, value));
+  if (value && typeof value === 'object' && 'intensity' in value) {
+    return toIntensity((value as { intensity: unknown }).intensity);
+  }
+  return null;
+}
+
+function normalizeRemoteEntry(raw: any): SymptomLogEntry | null {
+  if (!raw) return null;
+  const values: Record<string, number> = {};
+  const source = raw.values ?? raw.symptoms ?? raw.entries ?? {};
+
+  if (Array.isArray(source)) {
+    source.forEach((item: any) => {
+      const id = item?.symptomId ?? item?.symptom_id ?? item?.id;
+      const intensity = toIntensity(item?.intensity ?? item?.value ?? item?.score);
+      if (id && intensity !== null) values[String(id)] = intensity;
+    });
+  } else if (source && typeof source === 'object') {
+    Object.entries(source).forEach(([id, value]) => {
+      const intensity = toIntensity(value);
+      if (intensity !== null) values[id] = intensity;
+    });
+  }
+
+  const stamp = raw.date ?? raw.loggedAt ?? raw.createdAt ?? raw.created_at;
+  const date = stamp ? String(stamp).slice(0, 10) : dateKey(new Date());
+
+  return {
+    id: String(raw.id ?? crypto.randomUUID()),
+    date,
+    loggedAt: String(raw.loggedAt ?? raw.createdAt ?? raw.created_at ?? new Date().toISOString()),
+    values,
+  };
+}
+
 // Deterministic pseudo-random so seeded demo data is stable per day
 function seededRandom(seed: number): number {
   const x = Math.sin(seed * 9999 + 7) * 10000;
@@ -109,29 +147,63 @@ async function ensureSeeded() {
 }
 
 export async function getSymptomLogs(): Promise<SymptomLogEntry[]> {
-  await ensureSeeded();
-  await delay();
-  return readStore().sort((a, b) => (a.date < b.date ? 1 : -1));
+  return withApiFallback(
+    async () => {
+      const raw = await apiFetch<any>('/symptoms/history?limit=100');
+      const list = Array.isArray(raw) ? raw : (raw?.entries ?? raw?.logs ?? []);
+      return list
+        .map(normalizeRemoteEntry)
+        .filter((entry: SymptomLogEntry | null): entry is SymptomLogEntry => entry !== null)
+        .sort((a: SymptomLogEntry, b: SymptomLogEntry) => (a.date < b.date ? 1 : -1));
+    },
+    async () => {
+      await ensureSeeded();
+      await delay();
+      return readStore().sort((a, b) => (a.date < b.date ? 1 : -1));
+    }
+  );
 }
 
 export async function saveSymptomLog(values: Record<string, number>): Promise<SymptomLogEntry> {
-  await ensureSeeded();
-  const entries = readStore();
   const today = dateKey(new Date());
-  // one entry per day — merge into today's entry if it exists
-  const existing = entries.find((e) => e.date === today);
-  const entry: SymptomLogEntry = existing ?? {
-    id: crypto.randomUUID(),
-    date: today,
-    loggedAt: new Date().toISOString(),
-    values: {},
-  };
-  entry.values = { ...entry.values, ...values };
-  entry.loggedAt = new Date().toISOString();
-  const next = existing ? entries.map((e) => (e.id === entry.id ? entry : e)) : [...entries, entry];
-  writeStore(next);
-  await delay(200);
-  return entry;
+  return withApiFallback(
+    async () => {
+      const raw = await apiFetch<any>('/symptoms', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: today,
+          values,
+          symptoms: Object.entries(values).map(([symptomId, intensity]) => ({ symptomId, intensity })),
+        }),
+      });
+      const entry = normalizeRemoteEntry(raw) ?? {
+        id: crypto.randomUUID(),
+        date: today,
+        loggedAt: new Date().toISOString(),
+        values,
+      };
+      writeStore([entry, ...readStore().filter((e) => e.date !== today)]);
+      return entry;
+    },
+    async () => {
+      await ensureSeeded();
+      const entries = readStore();
+      // one entry per day — merge into today's entry if it exists
+      const existing = entries.find((e) => e.date === today);
+      const entry: SymptomLogEntry = existing ?? {
+        id: crypto.randomUUID(),
+        date: today,
+        loggedAt: new Date().toISOString(),
+        values: {},
+      };
+      entry.values = { ...entry.values, ...values };
+      entry.loggedAt = new Date().toISOString();
+      const next = existing ? entries.map((e) => (e.id === entry.id ? entry : e)) : [...entries, entry];
+      writeStore(next);
+      await delay(200);
+      return entry;
+    }
+  );
 }
 
 function burdenForEntry(entry: SymptomLogEntry, symptomIds: string[]): number | null {

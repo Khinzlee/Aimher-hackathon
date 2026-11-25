@@ -1,6 +1,7 @@
 // rPPG v8 service — same interface as Aimher's services/rppgV8Service.ts.
-// Backend calls are stubbed to localStorage until the API exists.
-// TODO(backend): swap bodies for apiClient calls to /rppg-v8/*
+// Uses the NestJS API when NEXT_PUBLIC_API_URL is set, otherwise localStorage.
+
+import { apiFetch, withApiFallback } from '@/lib/apiClient';
 
 const BASE_KEY = 'aimher-rppg-v8-sessions';
 const PRED_KEY = 'aimher-rppg-v8-predictions';

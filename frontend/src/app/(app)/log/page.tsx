@@ -93,6 +93,15 @@ export default function LogPage() {
         </p>
       </div>
 
+      <Link href="/log/morning" className="d-card d-cond" style={{ marginBottom: 8 }}>
+        <div className="ico" style={{ background: '#e3f1ee', color: '#3a8a7b' }}>☀️</div>
+        <div className="mid">
+          <div className="title">Morning Check-In</div>
+          <div className="sub">Fatigue, pelvic pressure &amp; pain sensitivity</div>
+        </div>
+        <ChevronRight size={20} color="#9aa5b1" />
+      </Link>
+
       {/* condition selector */}
       <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
         {CONDITIONS.map((c) => {
