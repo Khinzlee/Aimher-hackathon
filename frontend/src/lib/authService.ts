@@ -9,20 +9,32 @@ export interface AuthResult {
   demo?: boolean;
 }
 
+interface TokenResponse {
+  accessToken?: string;
+  access_token?: string;
+  token?: string;
+  tokenType?: string;
+  expiresIn?: number;
+}
+
+function toAuthResult(raw: TokenResponse): AuthResult {
+  const token = raw?.accessToken ?? raw?.access_token ?? raw?.token ?? null;
+  saveAccessToken(token);
+  return {
+    accessToken: token,
+    tokenType: raw?.tokenType ?? 'Bearer',
+    expiresIn: raw?.expiresIn,
+  };
+}
+
 export async function login(email: string, password: string): Promise<AuthResult> {
   return withApiFallback(
     async () => {
-      const raw = await apiFetch<any>('/auth/login', {
+      const raw = await apiFetch<TokenResponse>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      const token = raw?.accessToken ?? raw?.access_token ?? raw?.token ?? null;
-      saveAccessToken(token);
-      return {
-        accessToken: token,
-        tokenType: raw?.tokenType ?? 'Bearer',
-        expiresIn: raw?.expiresIn,
-      };
+      return toAuthResult(raw);
     },
     async () => ({ accessToken: null, demo: true })
   );
@@ -31,17 +43,11 @@ export async function login(email: string, password: string): Promise<AuthResult
 export async function register(name: string, email: string, password: string): Promise<AuthResult> {
   return withApiFallback(
     async () => {
-      const raw = await apiFetch<any>('/auth/register', {
+      const raw = await apiFetch<TokenResponse>('/auth/register', {
         method: 'POST',
         body: JSON.stringify({ name, email, password }),
       });
-      const token = raw?.accessToken ?? raw?.access_token ?? raw?.token ?? null;
-      saveAccessToken(token);
-      return {
-        accessToken: token,
-        tokenType: raw?.tokenType ?? 'Bearer',
-        expiresIn: raw?.expiresIn,
-      };
+      return toAuthResult(raw);
     },
     async () => ({ accessToken: null, demo: true })
   );

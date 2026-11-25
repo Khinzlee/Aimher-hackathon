@@ -4,199 +4,224 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, ClipboardList } from 'lucide-react';
-import { diseaseByRouteId, burdenSeverity, probabilitySeverity, riskScoreSeverity } from '@/lib/symptoms';
-import { getSymptomHistory, getCachedPrediction, type SymptomLogEntry } from '@/lib/symptomService';
-import SeverityBadge from '@/components/SeverityBadge';
-import TrendChart from '@/components/TrendChart';
+import { CONDITION_MAP, SYMPTOM_MAP, getConditionSymptoms, getSeverity } from '@/lib/symptoms';
+import { getConditionDetail, type ConditionDetail } from '@/lib/symptomService';
 import { SymptomIcon } from '@/components/SymptomIcon';
 
-function DiseaseDetail() {
+function Trend({ series, color }: { series: { date: string; value: number | null }[]; color: string }) {
+  const pts = series.filter((p) => p.value !== null);
+  if (pts.length < 2) return <p className="clin-note">Not enough data yet — log a few days to see a trend.</p>;
+  const w = 600, h = 140, pad = 8;
+  const vals = pts.map((p) => p.value as number);
+  const min = Math.min(...vals), max = Math.max(...vals), r = max - min || 1;
+  const xy = pts.map((p, i) => {
+    const x = pad + (i / (pts.length - 1)) * (w - pad * 2);
+    const y = h - pad - (((p.value as number) - min) / r) * (h - pad * 2);
+    return `${x},${y}`;
+  });
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 140 }}>
+      <polyline points={xy.join(' ')} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {xy.map((p, i) => {
+        const [x, y] = p.split(',').map(Number);
+        return <circle key={i} cx={x} cy={y} r="3.5" fill={color} />;
+      })}
+    </svg>
+  );
+}
+
+function ConditionView() {
   const params = useParams<{ id: string }>();
-  const disease = diseaseByRouteId(params.id);
-  const [entries, setEntries] = useState<SymptomLogEntry[] | null>(null);
+  const conditionId = params.id;
+  const [detail, setDetail] = useState<ConditionDetail | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'missing'>('loading');
 
   useEffect(() => {
-    getSymptomHistory(60).then((h) => setEntries(h.data));
-  }, []);
+    let alive = true;
+    getConditionDetail(conditionId, 30).then((d) => {
+      if (!alive) return;
+      if (d) { setDetail(d); setState('ready'); }
+      else setState('missing');
+    });
+    return () => { alive = false; };
+  }, [conditionId]);
 
-  if (!disease) {
+  const cond = CONDITION_MAP[conditionId];
+
+  if (state === 'missing' || (!cond && state === 'ready')) {
     return (
-      <div className="text-center py-16">
-        <p className="text-gray-500">Condition not found.</p>
-        <Link href="/dashboard" className="text-teal-700 text-sm font-medium mt-2 inline-block">
-          Back to dashboard
-        </Link>
-      </div>
+      <div className="clin-page"><div className="clin-wrap">
+        <div className="clin-empty">
+          <div className="empty-ico"><AlertTriangle size={30} /></div>
+          <h3>Condition not found</h3>
+          <p>This tracking card doesn&apos;t exist.</p>
+          <Link href="/dashboard" className="clin-btn">Back to dashboard</Link>
+        </div>
+      </div></div>
     );
   }
 
-  if (!entries) {
-    return <div className="bg-white rounded-2xl border border-gray-200 p-6 animate-pulse h-96" />;
+  if (state === 'loading' || !cond || !detail) {
+    return <div className="clin-page"><div className="clin-wrap"><div className="clin-card" style={{ height: 320 }} /></div></div>;
   }
 
-  const prediction = getCachedPrediction();
-  const pred = prediction?.diseases?.[disease.key] ?? null;
-  const probSev = pred ? probabilitySeverity(pred.probability) : null;
-  const riskSev = pred ? riskScoreSeverity(pred.riskScore) : null;
-  const elevated = pred ? pred.severity === 'High' || pred.predicted === 1 : false;
-
-  // burden + per-entry disease riskScore series (when predictions were cached per entry)
-  const burdenSeries = entries
-    .slice()
-    .reverse()
-    .map((e) => ({ date: e.loggedAt.slice(0, 10), value: e.symptomBurdenScore }));
-  const riskSeries = entries
-    .slice()
-    .reverse()
-    .map((e) => ({
-      date: e.loggedAt.slice(0, 10),
-      value: e.prediction?.[disease.key]?.riskScore != null
-        ? e.prediction[disease.key].riskScore * 10
-        : null,
-    }));
-
-  const FIELD_LABELS: [keyof SymptomLogEntry['data'], string][] = [
-    ['breast_soreness_vas', 'Breast Soreness'],
-    ['painful_touch_vas', 'Painful Touch'],
-    ['pelvic_pressure_vas', 'Pelvic Pressure'],
-    ['bloating_delta_cm', 'Bloating (cm)'],
-    ['fatigue_mfi5_vas', 'Fatigue (MFI-5)'],
-    ['acne_severity_likert', 'Acne (0–4)'],
-    ['hirsutism_mfg_score', 'Hirsutism mFG'],
-  ];
+  const { summary, symptoms, entries } = detail;
+  const burden = summary.latestBurden;
+  const sev = burden != null ? getSeverity(burden) : null;
+  const condSymptoms = getConditionSymptoms(cond);
+  const symById = new Map(symptoms.map((s) => [s.symptomId, s]));
 
   return (
-    <div className="space-y-6">
-      <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800">
-        <ArrowLeft className="h-4 w-4" /> Dashboard
-      </Link>
+    <div className="clin-page">
+      <div className="clin-wrap">
+        <div className="clin-top">
+          <Link href="/dashboard" className="clin-back"><ArrowLeft size={17} /> Dashboard</Link>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="" className="clin-mark" />
+        </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-5">
-        <div className="flex items-start gap-3">
-          <div
-            className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0"
-            style={{ backgroundColor: `${disease.color}1A` }}
-          >
-            <SymptomIcon name={disease.icon} className="h-6 w-6" style={{ color: disease.color }} />
+        <section className="clin-hero" style={{ background: `linear-gradient(135deg, ${cond.color}, ${cond.color}cc)` }}>
+          <span className="clin-kicker">Tracked condition</span>
+          <h1>{cond.fullName}</h1>
+          <p>{cond.description}</p>
+        </section>
+
+        {summary.redFlag && cond.redFlagMessage && (
+          <div className="clin-alert" style={{ marginTop: 14 }}>
+            <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+            <span>{cond.redFlagMessage}</span>
           </div>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold">{disease.fullName}</h1>
-            <p className="text-xs text-gray-500">{disease.description}</p>
+        )}
+
+        <div className="clin-section">
+          <div className="clin-section-label">Latest burden</div>
+          <div className="clin-card">
+            <div className="clin-card-head">
+              <div>
+                <h2>Symptom burden score</h2>
+                <p>Average intensity across this condition&apos;s tracked symptoms (0–10)</p>
+              </div>
+              <div className="clin-card-ico"><SymptomIcon name={cond.icon} className="h-5 w-5" /></div>
+            </div>
+            <div className="clin-grid four">
+              <div className="clin-tile">
+                <div className="t-label">Latest</div>
+                <div className="t-value" style={{ color: sev?.color ?? '#9aa6a3' }}>
+                  {burden != null ? burden.toFixed(1) : '—'}
+                </div>
+                <div className="t-unit">/ 10</div>
+              </div>
+              <div className="clin-tile">
+                <div className="t-label">Severity</div>
+                <div className="t-value" style={{ fontSize: '1.05rem' }}>
+                  {sev ? (
+                    <span className="clin-chip" style={{ background: sev.bg, color: sev.color }}>{sev.label}</span>
+                  ) : '—'}
+                </div>
+              </div>
+              <div className="clin-tile">
+                <div className="t-label">Entries</div>
+                <div className="t-value">{summary.entryCount}</div>
+                <div className="t-unit">days logged</div>
+              </div>
+              <div className="clin-tile">
+                <div className="t-label">Delta</div>
+                <div className="t-value">
+                  {summary.latestBurden != null && summary.previousBurden != null
+                    ? `${(summary.latestBurden - summary.previousBurden) >= 0 ? '+' : ''}${(summary.latestBurden - summary.previousBurden).toFixed(1)}`
+                    : '—'}
+                </div>
+                <div className="t-unit">vs previous</div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {elevated && (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 flex gap-2">
-            <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-red-800">
-              Elevated risk flagged by the model — consider discussing with a clinician.
-            </p>
+        <div className="clin-section">
+          <div className="clin-section-label">30-day trend</div>
+          <div className="clin-card">
+            <Trend series={summary.series} color={cond.color} />
           </div>
-        )}
-
-        {pred ? (
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="bg-gray-50 rounded-xl p-3">
-              <p className="text-xs text-gray-500">Probability</p>
-              <p className="text-2xl font-bold tabular-nums" style={{ color: probSev!.color }}>
-                {(pred.probability * 100).toFixed(0)}%
-              </p>
-              <div className="mt-1"><SeverityBadge severity={probSev!} /></div>
-            </div>
-            <div className="bg-gray-50 rounded-xl p-3">
-              <p className="text-xs text-gray-500">Risk Score</p>
-              <p className="text-2xl font-bold tabular-nums" style={{ color: riskSev!.color }}>
-                {(pred.riskScore * 100).toFixed(0)}%
-              </p>
-              <div className="mt-1"><SeverityBadge severity={riskSev!} /></div>
-            </div>
-          </div>
-        ) : (
-          <p className="mt-4 text-sm text-gray-400">
-            No prediction cached — log symptoms to generate one.
-          </p>
-        )}
-
-        <p className="text-[11px] text-gray-400 mt-4 leading-relaxed">{disease.disclaimer}</p>
-
-        <Link
-          href="/log"
-          className="mt-4 flex items-center justify-center gap-1.5 w-full rounded-xl py-2.5 text-sm font-semibold text-white"
-          style={{ backgroundColor: disease.color }}
-        >
-          <ClipboardList className="h-4 w-4" /> Log symptoms
-        </Link>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-200 p-5">
-        <h2 className="font-bold text-sm mb-3">Symptom burden trend</h2>
-        <TrendChart series={burdenSeries} color={disease.color} />
-      </div>
-
-      {riskSeries.some((p) => p.value !== null) && (
-        <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <h2 className="font-bold text-sm mb-3">Risk score trend (0–10 scaled)</h2>
-          <TrendChart series={riskSeries} color={disease.color} />
         </div>
-      )}
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-5">
-        <h2 className="font-bold text-sm mb-3">Log history</h2>
-        {entries.length === 0 ? (
-          <p className="text-sm text-gray-400">No entries yet.</p>
-        ) : (
-          <div className="overflow-x-auto -mx-5 px-5">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
-                  <th className="py-2 pr-3 font-medium">Date</th>
-                  <th className="py-2 px-2 font-medium">Phase</th>
-                  <th className="py-2 px-2 font-medium">Day</th>
-                  {FIELD_LABELS.map(([k, label]) => (
-                    <th key={k} className="py-2 px-2 font-medium whitespace-nowrap">{label.split(' ')[0]}</th>
-                  ))}
-                  <th className="py-2 pl-2 font-medium">Burden</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.slice(0, 14).map((e) => {
-                  const sev = burdenSeverity(e.symptomBurdenScore);
-                  return (
-                    <tr key={e.id} className="border-b border-gray-50 last:border-0">
-                      <td className="py-2 pr-3 text-gray-600 whitespace-nowrap">
-                        {new Date(e.loggedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                      </td>
-                      <td className="py-2 px-2 text-gray-600">{e.data.cycle_phase}</td>
-                      <td className="py-2 px-2 text-gray-600 tabular-nums">{e.data.day_of_cycle}</td>
-                      {FIELD_LABELS.map(([k]) => (
-                        <td key={k} className="py-2 px-2 text-center tabular-nums text-gray-700">
-                          {e.data[k]}
-                        </td>
-                      ))}
-                      <td className="py-2 pl-2">
-                        <span
-                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
-                          style={{ backgroundColor: sev.bg, color: sev.color }}
-                        >
-                          {e.symptomBurdenScore.toFixed(1)}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <div className="clin-section">
+          <div className="clin-section-label">Symptom breakdown</div>
+          <div className="clin-card">
+            {condSymptoms.map((s) => {
+              const stat = symById.get(s.id);
+              const avgSev = stat?.average != null ? getSeverity(stat.average) : null;
+              return (
+                <div key={s.id} className="clin-row">
+                  <div className="clin-row-main">
+                    <strong>{s.label}</strong>
+                    <small>{s.description}</small>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontWeight: 700, color: cond.color }}>
+                      {stat?.average != null ? stat.average.toFixed(1) : '—'}
+                    </div>
+                    {avgSev && (
+                      <span className="clin-chip" style={{ background: avgSev.bg, color: avgSev.color, marginTop: 4 }}>
+                        {avgSev.label}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
+          <p className="clin-note">{cond.disclaimer}</p>
+        </div>
+
+        <div className="clin-section">
+          <div className="clin-section-label">Recent logs</div>
+          <div className="clin-card">
+            {entries.length === 0 ? (
+              <p className="clin-note">No entries yet.</p>
+            ) : (
+              entries.slice(0, 10).map((e) => {
+                const vals = cond.symptomIds
+                  .map((id) => e.values[id])
+                  .filter((v): v is number => typeof v === 'number');
+                const avg = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+                const es = avg != null ? getSeverity(avg) : null;
+                return (
+                  <div key={e.id} className="clin-row">
+                    <div className="clin-row-main">
+                      <strong>{new Date(e.loggedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</strong>
+                      <small>
+                        {e.metrics
+                          ? `Day ${e.metrics.day_of_cycle} · ${e.metrics.cycle_phase}`
+                          : `${vals.length} symptoms rated`}
+                      </small>
+                    </div>
+                    {avg != null && es && (
+                      <span className="clin-chip" style={{ background: es.bg, color: es.color }}>
+                        {avg.toFixed(1)} · {es.label}
+                      </span>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="clin-actions" style={{ marginTop: 8 }}>
+          <Link href="/log" className="clin-btn">
+            <ClipboardList size={17} /> Log symptoms
+          </Link>
+          <Link href="/dashboard" className="clin-btn secondary">Dashboard</Link>
+        </div>
       </div>
     </div>
   );
 }
 
-export default function ConditionDetailPage() {
+export default function ConditionPage() {
   return (
-    <Suspense fallback={<div className="bg-white rounded-2xl border border-gray-200 p-6 animate-pulse h-96" />}>
-      <DiseaseDetail />
+    <Suspense fallback={<div className="clin-page"><div className="clin-wrap"><div className="clin-card" style={{ height: 320 }} /></div></div>}>
+      <ConditionView />
     </Suspense>
   );
 }

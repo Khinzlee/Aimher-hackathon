@@ -89,14 +89,14 @@ export function SignIn({ onSwitch }: { onSwitch: () => void }) {
         body: JSON.stringify({ email: id, password }),
       });
       storeSession(res.accessToken);
-      router.push("/onboarding");
+      router.push("/dashboard");
     } catch (err) {
       if (isApiRejection(err)) {
         setError(err instanceof Error ? err.message : "Invalid credentials");
       } else {
         // Backend unreachable — demo fallback
         await new Promise((r) => setTimeout(r, 1200));
-        router.push("/onboarding");
+        router.push("/dashboard");
       }
     } finally {
       setLoading(false);

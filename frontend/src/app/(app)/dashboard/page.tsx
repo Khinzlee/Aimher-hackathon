@@ -8,6 +8,7 @@ import {
   HeartPulse, Moon, Stethoscope, Target, Thermometer,
 } from 'lucide-react';
 import { getConditionSummaries } from '@/lib/symptomService';
+import { CONDITION_MAP } from '@/lib/symptoms';
 import { useNow } from '@/hooks/useNow';
 import { useProfile } from '@/hooks/useProfile';
 
@@ -39,27 +40,28 @@ const ICONS: Record<string, { Icon: any; color: string; bg: string }> = {
   endometrial: { Icon: Stethoscope, color: '#d13a3a', bg: '#fbe4e4' },
 };
 
-function iconFor(title: string) {
-  const t = title.toLowerCase();
-  const key = Object.keys(ICONS).find((k) => t.includes(k));
-  return key ? ICONS[key] : { Icon: Activity, color: '#3a8a7b', bg: '#e3f1ee' };
+function iconFor(id: string) {
+  return ICONS[id] ?? { Icon: Activity, color: '#3a8a7b', bg: '#e3f1ee' };
 }
 
-/* Reads a condition summary using several likely field names. */
+/* Maps a ConditionSummary (conditionId/latestBurden/series) to card view data. */
 function adapt(s: any) {
-  const series: number[] = (s.history ?? s.series ?? s.trend ?? s.scores ?? [])
-    .map((v: any) => (typeof v === 'number' ? v : Number(v?.score ?? v?.value ?? 0)));
-  const score = Number(s.score ?? s.latest ?? s.current ?? series[series.length - 1] ?? 0);
-  const delta =
-    s.delta ?? s.change ??
-    (series.length > 1 ? series[series.length - 1] - series[series.length - 2] : 0);
+  const cond = CONDITION_MAP[String(s.conditionId ?? s.id ?? '')];
+  const series: number[] = (s.series ?? [])
+    .map((p: any) => Number(typeof p === 'number' ? p : p?.value))
+    .filter((v: number) => Number.isFinite(v));
+  const latest = s.latestBurden != null ? Number(s.latestBurden) : null;
+  const prev = s.previousBurden != null ? Number(s.previousBurden) : null;
   return {
-    id: String(s.id ?? s.conditionId ?? s.key ?? s.slug ?? s.name),
-    title: String(s.shortName ?? s.name ?? s.label ?? s.title ?? 'Condition'),
-    subtitle: String(s.fullName ?? s.subtitle ?? s.description ?? ''),
-    score,
-    delta: Number(delta) || 0,
+    id: String(s.conditionId ?? s.id ?? cond?.id ?? ''),
+    title: cond?.name ?? String(s.name ?? s.title ?? 'Condition'),
+    subtitle: cond?.fullName ?? String(s.description ?? ''),
+    color: cond?.color ?? '#3a8a7b',
+    iconKey: cond?.id ?? '',
+    score: latest,
+    delta: latest != null && prev != null ? latest - prev : 0,
     series,
+    redFlag: Boolean(s.redFlag),
   };
 }
 
@@ -160,8 +162,8 @@ export default function DashboardPage() {
       )}
 
       {items.map((c) => {
-        const sev = severity(c.score);
-        const ic = iconFor(c.title);
+        const sev = c.score != null ? severity(c.score) : null;
+        const ic = iconFor(c.iconKey);
         const down = c.delta < 0;
         return (
           <Link key={c.id} href={`/conditions/${c.id}`} className="d-card d-cond">
@@ -172,14 +174,19 @@ export default function DashboardPage() {
               <div className="title">{c.title}</div>
               {c.subtitle && <div className="sub">{c.subtitle}</div>}
               <div className="score">
-                <strong style={{ color: sev.fg }}>{c.score.toFixed(1)}</strong>
+                <strong style={{ color: sev?.fg ?? '#9aa5b1' }}>
+                  {c.score != null ? c.score.toFixed(1) : '—'}
+                </strong>
                 <small>/10</small>
-                <span className="d-chip" style={{ background: sev.bg, color: sev.fg }}>{sev.label}</span>
+                {sev && <span className="d-chip" style={{ background: sev.bg, color: sev.fg }}>{sev.label}</span>}
               </div>
-              {c.delta !== 0 && (
+              {c.delta !== 0 && c.score != null && (
                 <div className="delta" style={{ color: down ? '#1f7a45' : '#c62f3a' }}>
                   {down ? '▼' : '▲'} {Math.abs(c.delta).toFixed(1)} vs previous entry
                 </div>
+              )}
+              {c.redFlag && (
+                <div className="delta" style={{ color: '#c62f3a' }}>⚠ Red-flag symptom reported</div>
               )}
             </div>
             <Spark data={c.series} color={ic.color} />
